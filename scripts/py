@@ -1,0 +1,9 @@
+#!/bin/sh
+# Run Python in the project env with the private data/work locations set, so callers (and agents)
+# never need to name a data path. Usage: scripts/py starter/baseline.py
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export MTAH_DATA_DIR="${MTAH_DATA_DIR:-$HOME/.mtah2027/data}"
+export MTAH_WORK_DIR="${MTAH_WORK_DIR:-$HOME/.mtah2027/work}"
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+cd "$ROOT"
+exec "$ROOT/.conda-env/bin/python" "$@"

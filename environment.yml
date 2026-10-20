@@ -1,0 +1,14 @@
+# Project Conda environment. Create with: scripts/setup-env.sh  (installs into ./.conda-env)
+# Mirrors requirements-starter.txt (scorer + starter). New packages are a proposal first (AGENTS.md).
+name: mtah2027
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pandas
+  - matplotlib
+  - notebook
+  - pip:
+      - kloppy==3.18.0

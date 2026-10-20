@@ -62,3 +62,18 @@ __pycache__/
 venv/
 env/
 .DS_Store
+
+# -- our working environment (see docs/DATA_POLICY.md) ----------------------------------------
+.conda-env/
+.orchestration/
+.pi/tasks/
+.pi/sessions/
+.claude/settings.local.json
+.claude/worktrees/
+config/*.local.json
+.env
+work/
+*.parquet
+*.npz
+*.npy
+*.pkl
