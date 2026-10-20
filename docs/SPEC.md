@@ -37,6 +37,8 @@ Smart Tagging (638 automatic instances), homography per frame.
 - Any model or service in the pipeline must be accessible to the organisers. **Hosted LLMs never see
   the data** (DATA_POLICY.md), so any LLM inside the pipeline is local.
 - Deterministic: same data in, same file out.
+- Data-safety rules are shared; active agent configuration (`.pi/`, `.claude/`) stays local and
+  ignored. Reusable guard code and tests remain optional tooling in the repo.
 
 ## Open questions
 

@@ -49,11 +49,20 @@ the shape or field name, not the row.
 
 ## Enforcement
 
+The policy applies to every developer and agent, regardless of tooling. Active `.pi/` and
+`.claude/` configurations are local, ignored, and not included in fresh clones. The shared
+`config/data-guard.json`, `scripts/agent_guard.py`, and tests remain available as optional guard
+building blocks; they do not install hooks automatically. Existing local configurations are
+preserved when untracked.
+
+Where locally configured:
+
 - **pi**: `.pi/extensions/data-guard.ts` (loaded once the project is trusted) blocks any tool call
   that matches the patterns in `config/data-guard.json`.
 - **Claude Code**: `.claude/settings.json` has deny rules plus a `PreToolUse` hook on every tool
   running `scripts/agent_guard.py`.
-- **Codex and others**: no hook. `AGENTS.md` rule zero only. Prefer pi or Claude Code here.
+- **Other tools or unconfigured clones**: no repository-installed hook. Follow `AGENTS.md` rule
+  zero; do not assume enforcement exists merely because the shared guard code is present.
 - Tests: `python3 -m unittest discover -s scripts -p 'test_*.py'`.
 
 Known limits, so nobody over-trusts the guard: it checks what a tool call *names*, not what a
@@ -71,7 +80,7 @@ a specific sequence) runs on this Mac:
 - **llama.cpp** (`/opt/homebrew/bin/llama-server`): pi's `/llama` integration.
 - To drive pi itself with a local model on data-touching tasks, register Ollama in
   `~/.pi/agent/models.json` (pi docs: models.md, "Configure a compatible endpoint") and pick it
-  with `/model`. In that session the guard still blocks by default. Disable it consciously only for
+  with `/model`. If a local guard is installed, it still blocks by default. Disable it consciously only for
   a local-model session.
 
 Any model used inside the pipeline must be inspectable by the organisers (RULES.md) and described

@@ -14,6 +14,17 @@ Only mark done when acceptance evidence is recorded. Evidence is aggregate only 
 | B2 | blocked on H1 | Data audit (aggregate only) | A script prints coverage statistics: ball visibility per half, track slot counts, any ownership/alive fields in the ATD, Smart Tagging class counts, homography validity. No rows printed. |
 | E1 | blocked on B0 | First method beyond nearest-player smoothing | Proposal with a hypothesis and the measured public-5-min spellF1/macroF1 with bootstrap intervals; reproducible command. |
 
+## H0a — local agent configuration
+
+Status: done. User-requested cleanup of tracked developer-tool settings.
+Acceptance: `.pi/` and `.claude/` are ignored and untracked; existing local configurations remain
+unchanged; shared rules and reusable guard code/tests remain tracked; docs do not promise guards
+on fresh clones. Preserve the existing `.gitignore` edit. Verify Git state and guard tests.
+Evidence: `git ls-files .pi .claude` empty; `git check-ignore` confirms both configurations ignored;
+`cmp` against HEAD confirms both local files unchanged. `git diff --check` passed;
+`python3 -m unittest discover -s scripts -p 'test_*.py'` → 12 tests OK.
+No hook code changed; runtime hook behavior was not re-tested. No commit or push performed.
+
 ## H0 notes
 
 - Guard tests: `python3 -m unittest discover -s scripts -p 'test_*.py'` → 12 tests OK.

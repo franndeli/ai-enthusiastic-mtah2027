@@ -19,8 +19,9 @@ Read `docs/DATA_POLICY.md` before touching anything near the data. In short:
   which sets the data paths, so the command never names a data path.
 - Data lives outside the repo in `~/.mtah2027/data` (`MTAH_DATA_DIR`); intermediate and frame-level
   outputs go to `~/.mtah2027/work` (`MTAH_WORK_DIR`). Never copy them into the repo or into a prompt.
-- A tool guard (`.pi/extensions/data-guard.ts`, `.claude/settings.json`, both calling
-  `scripts/agent_guard.py`) blocks calls that name data paths. A block is a stop sign, not a
+- Optional local tool guards (`.pi/extensions/data-guard.ts`, `.claude/settings.json`, both calling
+  `scripts/agent_guard.py`) block calls that name data paths when installed. These configurations
+  are ignored, not shipped in clones; the data rules apply with or without them. A block is a stop sign, not a
   puzzle: never work around it (other spelling, globbing, encoding, delegation, codemode). If you
   need information that only the data can give, ask the user, or propose a script that prints an
   aggregate.

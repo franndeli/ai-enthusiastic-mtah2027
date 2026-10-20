@@ -66,10 +66,8 @@ env/
 # -- our working environment (see docs/DATA_POLICY.md) ----------------------------------------
 .conda-env/
 .orchestration/
-.pi/tasks/
-.pi/sessions/
-.claude/settings.local.json
-.claude/worktrees/
+.pi
+.claude/
 config/*.local.json
 .env
 work/
