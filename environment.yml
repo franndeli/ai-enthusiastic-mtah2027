@@ -12,3 +12,7 @@ dependencies:
   - notebook
   - pip:
       - kloppy==3.18.0
+      # Approved 2026-10-22 (AGENTS.md: dependencies are proposals first).
+      - scikit-learn==1.6.1   # learned per-frame evidence (HistGradientBoosting)
+      - scipy==1.15.2         # alignment / optimisation helpers
+      - pyarrow==19.0.1       # cached features in MTAH_WORK_DIR

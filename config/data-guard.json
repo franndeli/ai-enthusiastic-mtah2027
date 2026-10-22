@@ -4,7 +4,7 @@
     { "regex": "\\.mtah2027(?![\\w-])", "why": "private data/work root (~/.mtah2027)" },
     { "regex": "MTAH_DATA_DIR|MTAH_WORK_DIR", "why": "variables that point at the private data/work root" },
     { "regex": "(?<![\\w.-])(?:\\./)?data/(?!README\\.md\\b)", "why": "repo data/ folder (gated match assets)" },
-    { "regex": "/mtah2027/data(?![\\w-])(?!/README\\.md\\b)", "why": "repo data/ folder (absolute path)" },
+    { "regex": "/mtah2027/data(?![\\w.-])(?!/README\\.md\\b)", "why": "repo data/ folder (absolute path)" },
     { "regex": "BAR-ATH_\\w*(?:atd|homography|smart_tagging|tactical|broadcast)", "why": "match asset filename" },
     { "regex": "_atd\\.(?:txt|xml)\\b|_homography\\.csv\\b|_smart_tagging\\.xml\\b", "why": "match asset filename" },
     { "regex": "\\.(?:mp4|mov|mkv|avi)\\b", "why": "match video" },
@@ -12,7 +12,8 @@
     { "regex": "evaluation/reports/", "why": "frame-level evaluation reports" }
   ],
   "allowedCommands": [
-    { "regex": "^(?:scripts/py|\\S*python3?)\\s+evaluation/(?:validate_submission|run_evaluation)\\.py(?:\\s+[\\w./=-]+)*\\s*$", "why": "the official scorer/validator print aggregate results only" }
+    { "regex": "^(?:scripts/py|\\S*python3?)\\s+evaluation/(?:validate_submission|run_evaluation)\\.py(?:\\s+[\\w./=-]+)*\\s*$", "why": "the official scorer/validator print aggregate results only" },
+    { "regex": "^(?:cd \\S+ && )?scripts/py\\s+(?:run|scripts/[\\w-]+)\\.py(?:\\s+[\\w./=,-]+)*\\s*$", "why": "repo entry point and scripts/ print aggregates only; arguments may name an output CSV" }
   ],
   "pathOnlyTools": ["write", "edit", "Write", "Edit", "MultiEdit", "NotebookEdit"]
 }

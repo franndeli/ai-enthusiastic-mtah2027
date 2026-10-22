@@ -44,6 +44,7 @@ class AllowsNormalWork(unittest.TestCase):
     def test_allows_code_and_docs(self):
         self.assertFalse(blocked("read", path="starter/baseline.py"))
         self.assertFalse(blocked("read", path="data/README.md"))
+        self.assertFalse(blocked("read", path="/Users/x/Developer/mtah2027/DATA.md"))
         self.assertFalse(blocked("read", path="evaluation/results/baseline_smooth50.csv"))
         self.assertFalse(blocked("read", path="evaluation/gt/BAR-ATH_possession_gt_public.csv"))
 
@@ -56,6 +57,10 @@ class AllowsNormalWork(unittest.TestCase):
         self.assertFalse(blocked("bash", command="scripts/data-status.sh"))
         self.assertFalse(blocked("bash", command="scripts/py evaluation/validate_submission.py evaluation/results/v1.csv"))
         self.assertFalse(blocked("bash", command="python evaluation/run_evaluation.py"))
+        self.assertFalse(blocked("bash", command="scripts/py run.py --out evaluation/results/v1.csv"))
+        self.assertFalse(blocked("bash", command="cd /Users/x/mtah2027 && scripts/py scripts/audit_data.py --half 1"))
+        self.assertTrue(blocked("bash", command="scripts/py run.py --out evaluation/results/v1.csv && head evaluation/results/v1.csv"))
+        self.assertTrue(blocked("bash", command="scripts/py scripts/x.py; cat data/tactical/a.txt"))
 
     def test_allowlist_rejects_chained_commands(self):
         self.assertTrue(blocked("bash", command="python evaluation/run_evaluation.py; head evaluation/results/v1.csv"))

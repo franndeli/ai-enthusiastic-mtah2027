@@ -1,0 +1,13 @@
+{
+  "_purpose": "Parameters of the possession pipeline (run.py). Version experiments by changing values here and recording results in docs/PLAN.md, not by copying files.",
+  "evidence": {
+    "margin_scale_m": 2.0,
+    "team_confidence_max": 0.9,
+    "slow_frac_dead": 0.75,
+    "dead_confidence_max": 0.8,
+    "missing_ball_team_weight": 0.0
+  },
+  "decoder": {
+    "switch_cost": {"team_switch": 6.0, "to_dead": 6.0, "from_dead": 6.0}
+  }
+}
