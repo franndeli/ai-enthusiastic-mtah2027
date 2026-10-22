@@ -14,9 +14,15 @@ from possession import D, X
 
 
 def kickoff_frames(game: str = GAME) -> dict:
-    """{half: first video frame of play}, from the published anchors."""
+    """{half: first video frame of play}, following the explicit FAQ boundaries."""
     entry = GAMES[game]
-    return {1: anchor_video_frame(entry["kickoff"]), 2: anchor_video_frame(entry["kickoff_2nd"])}
+    kick = {1: anchor_video_frame(entry["kickoff"]),
+            2: anchor_video_frame(entry["kickoff_2nd"])}
+    # FAQ "Which frames are actually graded?" overrides the anchor table:
+    # its first-half anchor is one frame late, second-half one frame early.
+    if game == "BAR-ATH":
+        kick = {1: 11185, 2: 113742}
+    return kick
 
 
 def half_play_blocks(game: str = GAME) -> list:
@@ -26,11 +32,29 @@ def half_play_blocks(game: str = GAME) -> list:
 
 
 def decode_halves(log_evidence: np.ndarray, decode_fn, game: str = GAME) -> np.ndarray:
-    """Run decode_fn on each half's play block; X outside; D between graded start and kick-off."""
+    """Run decode_fn on each half's play block; X outside; D between graded start and kick-off.
+
+    decode_fn(block_evidence) or decode_fn(block_evidence, start): the second form receives the
+    block's first video frame so per-frame side inputs can be sliced to match.
+    """
     n = log_evidence.shape[0]
     codes = np.full(n, X, dtype=np.int8)
+    wants_start = _accepts_start(decode_fn)
     for half, first_graded, last_graded in half_video_blocks(game):
         first_play = max(first_graded, kickoff_frames(game)[half])
         codes[first_graded:first_play] = D
-        codes[first_play:last_graded + 1] = decode_fn(log_evidence[first_play:last_graded + 1])
+        block = log_evidence[first_play:last_graded + 1]
+        codes[first_play:last_graded + 1] = (decode_fn(block, first_play) if wants_start
+                                             else decode_fn(block))
     return codes
+
+
+def _accepts_start(fn) -> bool:
+    import inspect
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+    return len([p for p in params.values()
+                if p.default is inspect.Parameter.empty
+                and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]) >= 2

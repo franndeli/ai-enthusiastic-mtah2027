@@ -33,6 +33,32 @@ Workers report changed files, test results and aggregate scores only.
 | T2 decoder | codex | `possession/decoder.py`, `possession/structure.py`, their tests, `scripts/sweep.py` | Per-frame transition cost modulation, optional duration-aware variant behind a config flag, synthetic tests incl. half boundaries and 1-frame flicker, switch-cost sweep harness printing a table |
 | T3 validation | codex | `scripts/audit_data.py`, `scripts/stress_test.py`, `scripts/score.py` | Aggregate audit (gap statistics per half, nearest-player accuracy and transitions-in-gaps on the public window, Smart-Tagging timing vs public D); gap-transplant stress test with seeds and transition-centred masks; one-line scoring wrapper with bootstrap |
 | T4 external data | claude | `possession/external.py`, `scripts/idsse_prepare.py`, `scripts/idsse_eval.py` | IDSSE loaded with dead frames kept, converted to `Match` arrays with H/A/D labels, label-semantics report (aggregate), ATD-like noise injection, leave-one-match-out evaluation of any config with the official metric |
+| T6 broadcast ball (W7a) | codex | `possession/broadcast.py`, `scripts/broadcast_align.py`, tests | Formation-based clock alignment; coverage of tactical gap frames by the broadcast ball; go/no-go at >= 15% coverage and < 2 m median disagreement |
+
+### W1 results (2026-10-22)
+
+- **T2 done.** Viterbi with per-frame `cost_scale` and optional age-expanded `min_duration_frames`
+  (<= 50); 7 synthetic tests; 0.4 s plain / 2.3 s duration mode per full match. Sweep on the
+  interim evidence: costs (12, 3, 12) public spellF1 0.253 [0.155, 0.359]; with
+  `min_duration_frames` 2: 0.294 [0.188, 0.400]; 32 public / 531 full-match possessions. The gain
+  is inside the noise band, not a selection. Kick-off frames fixed to the FAQ values (11185,
+  113742); `games.py` anchors are one frame off in both halves.
+- **T3 done (B2 audit).** Full match: ball visible 59.3% (public window 88.2%); 150 missing runs,
+  median 10.7 s, p90 33.8 s, max 221 s; 34.7% of graded frames sit in gaps > 10 s; tracked objects
+  mean 21.1 (p5 14, p95 23); ball outside bounds on 4.2% of visible frames. Public window:
+  nearest-visible-player team accuracy 77.8% (n 5640); last-seen-team persistence on missing
+  frames 94.4% (H/A, n 391); 1 of 20 transitions inside a gap. Smart Tagging: 59 set pieces
+  (26 throw-ins, 12 corners, 10 goal kicks, 5 free kicks, 6 kick-offs); only 2 of the 4 public D
+  stretches overlap a set-piece tag, tag end is ~295 frames after the GT restart (n 2): tags are
+  coarse. Stress test on the interim config: native 0.2415, transplant (41% missing, 5 seeds)
+  0.230 mean / 0.174 min, transition-centred gaps 5/10/20 s: 0.174 / 0.158 / 0.017.
+- **T4 built, blocked then unblocked.** Loader/noise/eval tested on synthetic data (25 tests OK).
+  figshare WAF rejects a browser-like User-Agent from scripts; honest UA works. Download running;
+  T4b runs the real files.
+- **T6 done: W7a NO-GO.** 31 of 253 broadcast runs aligned (602 s), 313 of 64,643 tactical gap
+  frames recovered (0.48%); both-visible ball disagreement median 2.6 m, p90 9.6 m; player residual
+  after alignment 0.8 m median (11.9 m before). Conservative aligner; a looser one is not worth
+  today's time. Broadcast assets dropped for Phase 1 unless revisited.
 
 ## R0 — research wave (perspective agents), 2026-10-22
 

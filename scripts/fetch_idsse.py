@@ -28,7 +28,9 @@ FILE_IDS = {
 # The springernature.figshare.com mirror kloppy uses answers scripted requests with a 202 WAF
 # challenge; the canonical ndownloader host (the API's own download_url) serves the file.
 URL = "https://ndownloader.figshare.com/files/{}"
-USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+# Measured 2026-10-22: a browser-like User-Agent from a script triggers the WAF (http 202, empty);
+# an honest client string is served (http 200). Keep it honest.
+USER_AGENT = "mtah2027-fetch-idsse/1.0 (python-urllib)"
 
 
 def idsse_dir() -> Path:
