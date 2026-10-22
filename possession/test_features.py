@@ -245,5 +245,51 @@ class RestartTeamTests(unittest.TestCase):
         self.assertEqual(float(t[900]), -1.0)
 
 
+class DeadOnsetTests(unittest.TestCase):
+    def test_speed_lead_moves_onset_earlier_not_the_end(self):
+        n = 600
+        match = make_match(n, still_ball(n, 0.5, 0.5), speed=4.0)
+        match.players_speed[200:400] = 0.5          # a stoppage, 200..399
+        feats = F.compute(match)
+        lead, smooth = feats["all_mean_speed_lead_m_s"], feats["all_mean_speed_smooth_m_s"]
+        self.assertGreater(float(smooth[190]), 2.5)
+        self.assertLess(float(lead[190]), 1.0)                 # slow already visible ahead
+        self.assertLess(float(lead[300]), 1.0)
+        self.assertGreater(float(lead[430]), 3.0)              # no extension after the restart
+        self.assertTrue(np.isnan(feats["all_mean_speed_lead_m_s"][-1]) or lead[-1] <= smooth[-1] + 1e-6)
+
+    def test_exit_ball_seen_outside_stays_exited_through_the_gap(self):
+        ball = np.full((200, 2), np.nan, np.float32)
+        ball[:50] = (0.5, 0.5)
+        ball[50:60] = (1.02, 0.5)                   # seen beyond the line
+        ball[150:] = (0.6, 0.5)                     # back inside after a gap
+        exited = F.ball_exit_features(ball)["ball_exited"]
+        self.assertEqual(float(exited[10]), 0.0)
+        self.assertEqual(float(exited[55]), 1.0)
+        self.assertEqual(float(exited[100]), 1.0)   # unseen, last seen out
+        self.assertEqual(float(exited[160]), 0.0)   # seen inside again
+
+    def test_exit_projects_a_ball_lost_while_heading_out(self):
+        ball = np.full((200, 2), np.nan, np.float32)
+        ball[:50, 0] = np.linspace(0.80, 0.98, 50)   # 0.0037 per frame towards the right line
+        ball[:50, 1] = 0.5
+        ball[120:] = (0.5, 0.5)
+        exited = F.ball_exit_features(ball)["ball_exited"]
+        self.assertEqual(float(exited[40]), 0.0)     # still inside and seen
+        self.assertEqual(float(exited[90]), 1.0)     # unseen; 40 frames of projection pass x = 1
+        self.assertEqual(float(exited[130]), 0.0)
+
+    def test_exit_ball_lost_while_still_is_not_exited(self):
+        ball = np.full((200, 2), np.nan, np.float32)
+        ball[:50] = (0.5, 0.5)
+        exited = F.ball_exit_features(ball)["ball_exited"]
+        self.assertEqual(float(exited[150]), 0.0)
+
+    def test_exit_before_first_sighting_is_nan(self):
+        ball = np.full((20, 2), np.nan, np.float32)
+        ball[10:] = (0.5, 0.5)
+        self.assertTrue(np.isnan(F.ball_exit_features(ball)["ball_exited"][:10]).all())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -179,6 +179,36 @@ class DeadEvidenceTests(unittest.TestCase):
         self.assertFalse(np.allclose(off, E.scores(f)))
 
 
+class DeadOnsetEvidenceTests(unittest.TestCase):
+    n = 50
+
+    def test_lead_speed_brings_dead_evidence_forward(self):
+        f = flat_features(self.n)
+        f["all_mean_speed_smooth_m_s"][:] = 3.5      # still running now
+        f["all_mean_speed_lead_m_s"] = np.full(self.n, 0.8, np.float32)  # but stopping within 3 s
+        self.assertTrue((E.scores(f)[:, D] > E.scores(f)[:, H]).all())
+        self.assertTrue((E.scores(f, {"slow_use_lead": 0})[:, D] < E.scores(f)[:, H]).all())
+
+    def test_exited_ball_raises_dead_and_is_switchable(self):
+        f = flat_features(self.n)
+        base = E.scores(f)[:, D]
+        f["ball_exited"] = np.ones(self.n, np.float32)
+        self.assertTrue((E.scores(f)[:, D] > base).all())
+        np.testing.assert_allclose(E.scores(f, {"w_exit": 0.0})[:, D], base)
+
+    def test_long_gap_with_slow_players_is_dead_evidence_only_when_asked(self):
+        f = flat_features(self.n)
+        f["all_mean_speed_lead_m_s"] = np.full(self.n, 0.8, np.float32)
+        f["ball_present"][:] = 0
+        f["frames_since_ball"] = np.full(self.n, 200, np.float32)
+        f["frames_until_ball"] = np.full(self.n, 200, np.float32)
+        off = E.scores(f)[:, D]
+        on = E.scores(f, {"w_gap_dead": 1.0})[:, D]
+        self.assertTrue((on > off).all())
+        f["all_mean_speed_lead_m_s"][:] = 3.5          # players running: gap says nothing
+        np.testing.assert_allclose(E.scores(f, {"w_gap_dead": 1.0})[:, D], E.scores(f)[:, D])
+
+
 class EndToEndTests(unittest.TestCase):
     def test_home_carries_then_away_takes_over_then_stoppage(self):
         """Ball glued to the home player, then to the away player, then everyone walks."""
@@ -199,7 +229,7 @@ class EndToEndTests(unittest.TestCase):
         ev = E.scores(F.compute(match, tags=[]))
         label = np.argmax(ev, axis=1)
         self.assertTrue((label[40:160] == H).all())
-        self.assertTrue((label[240:360] == A).all())
+        self.assertTrue((label[240:300] == A).all())
         self.assertTrue((label[440:560] == D).all())
 
 

@@ -47,20 +47,24 @@ def score_match(match: Match, gt: np.ndarray, config: dict, bootstrap: int) -> d
 
 def print_table(title: str, rows: dict[str, dict], bootstrap: int) -> None:
     print("\n{}".format(title))
-    print("{:8} {:>8} {:>8} {:>13} {:>17} {:>6}{}".format(
-        "match", "spellF1", "macroF1", "poss pred/gt", "mean dur pred/gt", "sec",
+    print("{:8} {:>8} {:>8} {:>6} {:>6} {:>6} {:>7} {:>13} {:>17} {:>6}{}".format(
+        "match", "spellF1", "macroF1", "D P", "D R", "D F1", "aliveF1", "poss pred/gt",
+        "mean dur pred/gt", "sec",
         "  spell 5-95%" if bootstrap else ""))
     for mid, r in rows.items():
-        print("{:8} {:8.3f} {:8.3f} {:>13} {:>17} {:6.1f}{}".format(
-            mid, r["spell_f1_mean"], r["macro_f1"],
+        print("{:8} {:8.3f} {:8.3f} {:6.3f} {:6.3f} {:6.3f} {:7.3f} {:>13} {:>17} {:6.1f}{}".format(
+            mid, r["spell_f1_mean"], r["macro_f1"], r["per_class"]["D"]["precision"],
+            r["per_class"]["D"]["recall"], r["per_class"]["D"]["f1"], r["alive_dead_f1"],
             "{}/{}".format(r["n_pred_spells"], r["n_gt_spells"]),
             "{:.1f}/{:.1f}s".format(r["mean_spell_duration_s"], r["gt_mean_spell_duration_s"]),
             r["seconds"],
             "  [{:.3f}, {:.3f}]".format(r["spell_bootstrap_low"], r["spell_bootstrap_high"])
             if bootstrap else ""))
     mean = lambda key: float(np.mean([r[key] for r in rows.values()]))  # noqa: E731
-    print("{:8} {:8.3f} {:8.3f} {:>13} {:>17} {:6.1f}".format(
-        "MEAN", mean("spell_f1_mean"), mean("macro_f1"),
+    mean_d = lambda key: float(np.mean([r["per_class"]["D"][key] for r in rows.values()]))  # noqa: E731
+    print("{:8} {:8.3f} {:8.3f} {:6.3f} {:6.3f} {:6.3f} {:7.3f} {:>13} {:>17} {:6.1f}".format(
+        "MEAN", mean("spell_f1_mean"), mean("macro_f1"), mean_d("precision"), mean_d("recall"),
+        mean_d("f1"), mean("alive_dead_f1"),
         "{:.0f}/{:.0f}".format(mean("n_pred_spells"), mean("n_gt_spells")),
         "{:.1f}/{:.1f}s".format(mean("mean_spell_duration_s"), mean("gt_mean_spell_duration_s")),
         mean("seconds")))

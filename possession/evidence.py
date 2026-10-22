@@ -38,7 +38,11 @@ DEFAULT_PARAMS = {
     "w_slow": 1.5,                 # players walking: low smoothed mean speed
     "slow_ref_m_s": 1.5,           # mean player speed (m/s) that is neutral
     "slow_scale_m_s": 0.5,
+    "slow_use_lead": 1,            # 1: judge the speed by min(now, 3 s ahead): earlier dead-ball onset
     "w_out": 1.0,                  # ball beyond the lines
+    "w_gap_dead": 0.0,             # long ball gap while players are slow (ball boy has the ball)
+    "gap_dead_ref_s": 10.0,        # gap length that gives the full effect
+    "w_exit": 0.5,                 # ball left the pitch (seen or projected) and is not back yet
     "w_tag_dead": 0.5,             # inside a tagged set-piece window
     "dead_confidence_max": 0.8,    # dead probability clipped to [dead_floor, this]
     "dead_floor": 0.05,
@@ -81,9 +85,19 @@ def team_logit(features: dict, p: dict) -> np.ndarray:
 
 def dead_logit(features: dict, p: dict) -> np.ndarray:
     """Log-odds dead vs alive, from the dead-ball clues."""
-    slow = (p["slow_ref_m_s"] - features["all_mean_speed_smooth_m_s"]) / p["slow_scale_m_s"]
+    speed = features["all_mean_speed_smooth_m_s"]
+    if p["slow_use_lead"]:
+        speed = features.get("all_mean_speed_lead_m_s", speed)
+    slow = (p["slow_ref_m_s"] - speed) / p["slow_scale_m_s"]
     z = p["dead_bias"] + p["w_slow"] * np.clip(_zero_nan(slow), -2, 2)
     z = z + p["w_out"] * _zero_nan(features["ball_out_frac"])
+    if "ball_exited" in features:
+        z = z + p["w_exit"] * _zero_nan(features["ball_exited"])
+    if p["w_gap_dead"]:
+        gap = features["frames_since_ball"] + features["frames_until_ball"]  # inf at the ends
+        gap_share = np.where(features["ball_present"] > 0, 0.0,
+                             np.clip(gap / (p["gap_dead_ref_s"] * FPS), 0.0, 1.0))
+        z = z + p["w_gap_dead"] * gap_share * np.clip(_zero_nan(slow), 0.0, 2.0) / 2.0
     if "tag_set_piece" in features:
         z = z + p["w_tag_dead"] * features["tag_set_piece"]
     return z

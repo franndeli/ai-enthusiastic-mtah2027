@@ -24,6 +24,9 @@ BALL_SPEED_HALF_SPAN = 2         # ball speed is measured over positions this ma
 BALL_WINDOW_FRAMES = FPS         # out-of-bounds share is taken over 1 s
 SHAPE_WINDOW_FRAMES = 2 * FPS    # team speed is smoothed over 2 s
 PLAYER_SLOW_M_S = 0.5
+SPEED_LEAD_FRAMES = 3 * FPS      # dead-ball onset: players slow down after the ball dies, so look ahead
+EXIT_VELOCITY_FRAMES = 5         # ball velocity for the exit projection: last 0.2 s of the track
+EXIT_PROJECT_MAX_FRAMES = 2 * FPS  # a ball unseen for longer is not extrapolated any further
 SHAPE_SMOOTH_FRAMES = 2 * FPS    # ball-free shape differences are smoothed over 2 s
 SHAPE_VEL_HALF_SPAN = 4 * FPS    # block velocity compares positions 4 s either side
 SHAPE_Z_CLIP = 3.0
@@ -103,6 +106,29 @@ def gap_features(ball_present: np.ndarray) -> dict:
             "frames_until_ball": until.astype(np.float32)}
 
 
+def ball_exit_features(ball_xy: np.ndarray) -> dict:
+    """Has the ball left the pitch and not been seen back inside since?
+
+    ball_exited: 1 while the last seen ball position is beyond the lines, or its last velocity
+    carries it beyond them within EXIT_PROJECT_MAX_FRAMES (the tracker loses a ball that leaves
+    through a crowd); 0 when the ball is seen inside the lines; NaN before the first sighting.
+    Stays 1 through the whole gap, until the ball is seen inside again.
+    """
+    n = len(ball_xy)
+    idx = np.arange(n)
+    present = ~np.isnan(ball_xy[:, 0])
+    last = np.maximum.accumulate(np.where(present, idx, -1))
+    safe = np.maximum(last, 0)
+    prev = np.maximum(safe - EXIT_VELOCITY_FRAMES, 0)
+    steps = np.maximum(safe - prev, 1)
+    velocity = np.where(present[prev][:, None], (ball_xy[safe] - ball_xy[prev]) / steps[:, None], 0.0)
+    horizon = np.minimum(idx - safe, EXIT_PROJECT_MAX_FRAMES)[:, None]
+    projected = ball_xy[safe] + velocity * horizon
+    with np.errstate(invalid="ignore"):
+        beyond = np.any((projected < 0) | (projected > 1), axis=1)
+    return {"ball_exited": np.where(last >= 0, beyond, np.nan).astype(np.float32)}
+
+
 def control_features(feats: dict) -> dict:
     """Who has the ball under control, from sustained proximity of a slow-enough ball.
 
@@ -158,8 +184,13 @@ def team_shape_features(match: Match) -> dict:
         out["all_mean_speed_m_s"] = np.nanmean(speed, axis=1).astype(np.float32)
         out["frac_players_slow"] = np.nanmean(
             np.where(np.isnan(speed), np.nan, speed < PLAYER_SLOW_M_S), axis=1).astype(np.float32)
-    out["all_mean_speed_smooth_m_s"] = _moving_mean(
-        out["all_mean_speed_m_s"], SHAPE_WINDOW_FRAMES).astype(np.float32)
+    smooth = _moving_mean(out["all_mean_speed_m_s"], SHAPE_WINDOW_FRAMES)
+    out["all_mean_speed_smooth_m_s"] = smooth.astype(np.float32)
+    # min(now, SPEED_LEAD ahead): moves the start of a slow stretch earlier without delaying its
+    # end (when play restarts the speed only rises, so the minimum is still "now")
+    ahead = np.full_like(smooth, np.nan)
+    ahead[:-SPEED_LEAD_FRAMES] = smooth[SPEED_LEAD_FRAMES:]
+    out["all_mean_speed_lead_m_s"] = np.fmin(smooth, ahead).astype(np.float32)
     return out
 
 
@@ -280,6 +311,7 @@ def compute(match: Match, tags: list | None = None) -> dict:
     feats = ball_features(match)
     feats.update(gap_features(feats["ball_present"] > 0))
     feats.update(control_features(feats))
+    feats.update(ball_exit_features(match.ball_xy))
     feats["ball_out_frac"] = _moving_mean(feats["ball_out"].astype(np.float64),
                                           BALL_WINDOW_FRAMES).astype(np.float32)
     feats.update(team_memory_features(feats["control_balance"]))

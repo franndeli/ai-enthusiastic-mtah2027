@@ -45,6 +45,13 @@ def make_scorers(model: learned.LearnedModel, config: dict, weight: float) -> di
             "learned": with_weight(1.0), "blend": with_weight(weight)}
 
 
+def scaled_config(config: dict, scale: float) -> dict:
+    """Copy of config whose decoder switch costs are multiplied by `scale`."""
+    out = dict(config, decoder=dict(config["decoder"]))
+    out["decoder"]["switch_cost"] = {k: v * scale for k, v in config["decoder"]["switch_cost"].items()}
+    return out
+
+
 def idsse_codes(match, log_evidence: np.ndarray, config: dict) -> np.ndarray:
     cost = decoder.switch_matrix(**config["decoder"]["switch_cost"])
     codes = np.full(match.n_frames, X, dtype=np.int8)
@@ -67,7 +74,9 @@ def mean_row(rows: list[dict]) -> dict:
     return {key: float(np.mean([r[key] for r in rows])) for key in ("spell_f1_mean", "macro_f1")}
 
 
-def idsse_table(ids: list[str], folds: dict, config: dict, weight: float, bootstrap: int) -> None:
+def idsse_table(ids: list[str], folds: dict, config: dict, weight: float, scales: list[float],
+                bootstrap: int) -> None:
+    """Rules at scale 1; learned and blend at every scale in `scales` (decoder switch-cost factor)."""
     results = {"clean": {}, "noisy": {}}
     for mid in ids:
         ext = external.load_external(mid)
@@ -75,37 +84,45 @@ def idsse_table(ids: list[str], folds: dict, config: dict, weight: float, bootst
         for kind, match in (("clean", ext.match),
                             ("noisy", external.inject_noise(ext.match, EVAL_SEED, fps=ext.fps))):
             feats = features.compute(match)
-            results[kind][mid] = {
-                name: pm.evaluate(ext.codes, idsse_codes(match, scorer(feats), config),
-                                  bootstrap_n=bootstrap)
-                for name, scorer in scorers.items()}
+            row = {}
+            for name, scorer in scorers.items():
+                log_evidence = scorer(feats)
+                for scale in ([1.0] if name == "rules" else scales):
+                    label = name if name == "rules" else "{} x{:g}".format(name, scale)
+                    row[label] = pm.evaluate(ext.codes, idsse_codes(
+                        match, log_evidence, scaled_config(config, scale)), bootstrap_n=bootstrap)
+            results[kind][mid] = row
     for kind in results:
         print("\nIDSSE leave-one-match-out, {} tracking (eval seed {}): spellF1 / macroF1".format(
             kind, EVAL_SEED))
         names = list(next(iter(results[kind].values())))
-        print("{:8}".format("match") + "".join("{:>20}".format(n) for n in names))
+        print("{:8}".format("match") + "".join("{:>16}".format(n) for n in names))
         for mid, by_name in results[kind].items():
             print("{:8}".format(mid) + "".join(
-                "{:>12.3f}/{:.3f}".format(by_name[n]["spell_f1_mean"], by_name[n]["macro_f1"])
+                "{:>9.3f}/{:.3f}".format(by_name[n]["spell_f1_mean"], by_name[n]["macro_f1"])
                 for n in names))
         means = {n: mean_row([r[n] for r in results[kind].values()]) for n in names}
         print("{:8}".format("MEAN") + "".join(
-            "{:>12.3f}/{:.3f}".format(means[n]["spell_f1_mean"], means[n]["macro_f1"])
+            "{:>9.3f}/{:.3f}".format(means[n]["spell_f1_mean"], means[n]["macro_f1"])
             for n in names))
+        print("{:8}".format("poss/gt") + "".join(
+            "{:>16.2f}".format(np.mean([r[n]["n_pred_spells"] / r[n]["n_gt_spells"]
+                                        for r in results[kind].values()])) for n in names))
 
 
-def our_match_table(final: learned.LearnedModel, config: dict, weight: float,
+def our_match_table(final: learned.LearnedModel, config: dict, weight: float, scale: float,
                     bootstrap: int, seeds: int) -> None:
     match, gt, tags = io.load_match(), io.load_public_gt(), load_tags(config)
     print("\nour match: public window and stress masks (spellF1 mean / min, macroF1, possessions)")
     for name, scorer in make_scorers(final, config, weight).items():
+        run_config = config if name == "rules" else scaled_config(config, scale)
         with patched_evidence(scorer), warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
-            codes = label_codes_from_config(config, match, tags)
+            codes = label_codes_from_config(run_config, match, tags)
             result = pm.evaluate(gt, codes, bootstrap_n=bootstrap)
             half_runs = [(first, last + 1) for _, first, last in match.halves]
             full = pm.possession_stats(pm.fill_abstentions(codes, half_runs), half_runs)
-            stress = run_stress(config, match, gt, seeds=seeds, native_codes=codes)
+            stress = run_stress(run_config, match, gt, seeds=seeds, native_codes=codes)
         interval = ("" if not bootstrap else " [{:.3f}, {:.3f}]".format(
             result["spell_bootstrap_low"], result["spell_bootstrap_high"]))
         print("{}: public spellF1 {:.3f}{} macroF1 {:.3f}; full match {} possessions, mean {:.1f}s".format(
@@ -122,6 +139,10 @@ def main() -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--matches", nargs="*", default=None)
     parser.add_argument("--weight", type=float, default=0.5, help="blend weight of the learned part")
+    parser.add_argument("--switch-scales", type=float, nargs="+", default=[1.0],
+                        help="IDSSE: decoder switch-cost factors tried for learned/blend")
+    parser.add_argument("--our-scale", type=float, default=1.0,
+                        help="our match: switch-cost factor for learned/blend")
     parser.add_argument("--bootstrap", type=int, default=0)
     parser.add_argument("--seeds", type=int, default=5, help="transplant mask seeds")
     parser.add_argument("--no-ours", action="store_true")
@@ -130,9 +151,9 @@ def main() -> int:
     ids = args.matches or cached_matches()
     final, folds = learned.fit_with_calibration(build_rows(ids))
     print("temperature {}".format(final.temperature))
-    idsse_table(ids, folds, config, args.weight, args.bootstrap)
+    idsse_table(ids, folds, config, args.weight, args.switch_scales, args.bootstrap)
     if not args.no_ours:
-        our_match_table(final, config, args.weight, args.bootstrap, args.seeds)
+        our_match_table(final, config, args.weight, args.our_scale, args.bootstrap, args.seeds)
     return 0
 
 
