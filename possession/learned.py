@@ -18,7 +18,6 @@ from pathlib import Path
 
 import joblib
 import numpy as np
-from scipy.ndimage import uniform_filter1d
 from sklearn.ensemble import HistGradientBoostingClassifier
 from threadpoolctl import threadpool_limits
 
@@ -75,15 +74,6 @@ def swap_teams(features: dict) -> dict:
     return out
 
 
-def _window_mean(values: np.ndarray, size: int) -> np.ndarray:
-    """Centred moving mean ignoring NaN; NaN where the window holds no valid sample."""
-    valid = ~np.isnan(values)
-    total = uniform_filter1d(np.where(valid, values, 0.0).astype(np.float64), size, mode="constant")
-    count = uniform_filter1d(valid.astype(np.float64), size, mode="constant")
-    with np.errstate(all="ignore"):
-        return np.where(count > 1e-9, total / count, np.nan)
-
-
 def design_matrix(features: dict) -> tuple[np.ndarray, tuple]:
     """(n, F) float32 model input and its column names. NaN = unknown (the classifier handles it)."""
     cols = {name: features[name] for name in _NEUTRAL}
@@ -99,10 +89,10 @@ def design_matrix(features: dict) -> tuple[np.ndarray, tuple]:
     near_diff = np.clip(near_away, 0, NEAR_CAP_M) - np.clip(near_home, 0, NEAR_CAP_M)
     cols["near_min_m"] = np.minimum(near_home, near_away)
     for size in WINDOWS_FRAMES:
-        cols["near_diff_{}f".format(size)] = _window_mean(near_diff, size)
+        cols["near_diff_{}f".format(size)] = feature_module._moving_mean(near_diff, size)
     present = features["ball_present"]
-    cols["ball_present_frac_10s"] = _window_mean(present, 10 * FPS)
-    cols["ball_present_frac_60s"] = _window_mean(present, 60 * FPS)
+    cols["ball_present_frac_10s"] = feature_module._moving_mean(present, 10 * FPS)
+    cols["ball_present_frac_60s"] = feature_module._moving_mean(present, 60 * FPS)
 
     names = tuple(cols)
     return np.stack([np.asarray(cols[name], dtype=np.float32) for name in names], axis=1), names

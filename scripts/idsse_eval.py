@@ -23,19 +23,18 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "evaluation"))
 
 import possession_metrics as pm  # noqa: E402
-from possession import X, decoder, evidence, features  # noqa: E402
+from possession import evidence, features  # noqa: E402
 from possession import external  # noqa: E402
 from possession.io import Match  # noqa: E402
+from run import decode_blocks  # noqa: E402
 
 
 def predict(match: Match, config: dict) -> np.ndarray:
     """Pipeline codes for one match: each half decoded on its own, X outside the halves."""
-    log_evidence = evidence.scores(features.compute(match), config.get("evidence"))
-    cost = decoder.switch_matrix(**config["decoder"]["switch_cost"])
-    codes = np.full(match.n_frames, X, dtype=np.int8)
-    for _, first, last in match.halves:
-        codes[first:last + 1] = decoder.decode(log_evidence[first:last + 1], cost)
-    return codes
+    feats = features.compute(match)
+    log_evidence = evidence.scores(feats, config.get("evidence"))
+    return decode_blocks(log_evidence, [(first, last) for _, first, last in match.halves],
+                         config, feats)
 
 
 def score_match(match: Match, gt: np.ndarray, config: dict, bootstrap: int) -> dict:

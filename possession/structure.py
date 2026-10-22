@@ -25,12 +25,6 @@ def kickoff_frames(game: str = GAME) -> dict:
     return kick
 
 
-def half_play_blocks(game: str = GAME) -> list:
-    """[(half, first_play_frame, last_graded_frame)]: the part of each half worth decoding."""
-    kick = kickoff_frames(game)
-    return [(half, max(first, kick[half]), last) for half, first, last in half_video_blocks(game)]
-
-
 def decode_halves(log_evidence: np.ndarray, decode_fn, game: str = GAME) -> np.ndarray:
     """Run decode_fn on each half's play block; X outside; D between graded start and kick-off.
 

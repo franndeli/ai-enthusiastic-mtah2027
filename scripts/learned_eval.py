@@ -24,8 +24,8 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from evaluation import possession_metrics as pm  # noqa: E402
-from possession import X, decoder, evidence, external, features, io, learned  # noqa: E402
-from run import DEFAULT_CONFIG, label_codes_from_config, load_config, load_tags  # noqa: E402
+from possession import evidence, external, features, io, learned  # noqa: E402
+from run import DEFAULT_CONFIG, decode_blocks, label_codes_from_config, load_config, load_tags  # noqa: E402
 from stress_test import run_stress  # noqa: E402
 from train_evidence import build_rows, cached_matches  # noqa: E402
 
@@ -52,12 +52,10 @@ def scaled_config(config: dict, scale: float) -> dict:
     return out
 
 
-def idsse_codes(match, log_evidence: np.ndarray, config: dict) -> np.ndarray:
-    cost = decoder.switch_matrix(**config["decoder"]["switch_cost"])
-    codes = np.full(match.n_frames, X, dtype=np.int8)
-    for _, first, last in match.halves:
-        codes[first:last + 1] = decoder.decode(log_evidence[first:last + 1], cost)
-    return codes
+def idsse_codes(match, log_evidence: np.ndarray, config: dict,
+                feats: dict | None = None) -> np.ndarray:
+    return decode_blocks(log_evidence, [(first, last) for _, first, last in match.halves],
+                         config, feats)
 
 
 @contextmanager
@@ -90,7 +88,7 @@ def idsse_table(ids: list[str], folds: dict, config: dict, weight: float, scales
                 for scale in ([1.0] if name == "rules" else scales):
                     label = name if name == "rules" else "{} x{:g}".format(name, scale)
                     row[label] = pm.evaluate(ext.codes, idsse_codes(
-                        match, log_evidence, scaled_config(config, scale)), bootstrap_n=bootstrap)
+                        match, log_evidence, scaled_config(config, scale), feats), bootstrap_n=bootstrap)
             results[kind][mid] = row
     for kind in results:
         print("\nIDSSE leave-one-match-out, {} tracking (eval seed {}): spellF1 / macroF1".format(
@@ -161,5 +159,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as exc:  # noqa: BLE001 - the data guard: no values in tracebacks
-        print(f"learned_eval failed: {type(exc).__name__}: {str(exc)[:200]}", file=sys.stderr)
+        print(f"learned_eval failed: {type(exc).__name__}", file=sys.stderr)
         raise SystemExit(1)

@@ -5,7 +5,6 @@ Never prints or logs data values: errors name fields, shapes and frame indices o
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -13,13 +12,12 @@ from pathlib import Path
 
 import numpy as np
 
-from games import GAME, GAMES, asset_paths, half_video_blocks, require, source_frames
-from possession import FPS, LABELS
-
-log = logging.getLogger(__name__)
+from games import GAME, GAMES, half_video_blocks, require, source_frames
+from possession import LABELS
 
 HOME, AWAY = 0, 1
 FIELD_SEP, GROUP_SEP, MISSING = ":", ";", "N"
+PARSER_VERSION = 2
 
 
 @dataclass
@@ -76,55 +74,86 @@ def team_of_each_slot(meta_path: str) -> np.ndarray:
     return np.array([HOME if t == team_ids[0] else AWAY for t in slots], dtype=np.int8)
 
 
-def parse_atd(raw_path: str, n_frames: int, n_slots: int):
-    """Stream the raw ATD text into arrays. Lines are '<frame_id>:<p>;<p>;...:<x,y,s>'."""
+def _atd_float(values: list[str], column: int, frame_idx: int,
+               slot_idx: int | None, field: str) -> float:
+    """Convert one field without including asset tokens in exception messages."""
+    try:
+        return float(values[column])
+    except (ValueError, IndexError, OverflowError):
+        location = f"video frame index {frame_idx}"
+        if slot_idx is not None:
+            location += f", slot index {slot_idx}"
+        raise ValueError(f"ATD {location}: invalid {field}") from None
+
+
+def parse_atd(raw_path: str, n_frames: int, n_slots: int) -> tuple[np.ndarray, np.ndarray]:
+    """Stream ATD into arrays, rejecting malformed, duplicate and missing frame records."""
     players = np.full((n_frames, n_slots, 3), np.nan, dtype=np.float32)
     ball = np.full((n_frames, 3), np.nan, dtype=np.float32)
-    seen = 0
+    seen = np.zeros(n_frames, dtype=bool)
     with open(raw_path) as handle:
-        for line in handle:
+        for record_idx, line in enumerate(handle):
             parts = line.rstrip("\n").split(FIELD_SEP)
             if len(parts) != 3:
-                continue
-            frame = int(parts[0]) - 1  # frame_id counts from 1, video frames from 0
-            if not 0 <= frame < n_frames:
-                raise ValueError("ATD frame_id out of range at video frame {}".format(frame))
-            seen += 1
-            for slot, group in enumerate(parts[1].split(GROUP_SEP)):
-                if slot >= n_slots or not group or group[0] == MISSING:
+                raise ValueError(f"ATD record index {record_idx}: invalid field structure")
+            try:
+                frame_idx = int(parts[0]) - 1
+            except (ValueError, OverflowError):
+                raise ValueError(f"ATD record index {record_idx}: invalid frame_id") from None
+            if not 0 <= frame_idx < n_frames:
+                raise ValueError(f"ATD record index {record_idx}: frame_id out of range")
+            if seen[frame_idx]:
+                raise ValueError(f"ATD video frame index {frame_idx}: duplicate frame_id")
+            seen[frame_idx] = True
+            for slot_idx, group in enumerate(parts[1].split(GROUP_SEP)):
+                if slot_idx >= n_slots or not group or group[0] == MISSING:
                     continue
                 values = group.split(",")
-                players[frame, slot, 0] = float(values[0])
-                players[frame, slot, 1] = float(values[1])
+                for column, field in enumerate(("player_x", "player_y")):
+                    players[frame_idx, slot_idx, column] = _atd_float(
+                        values, column, frame_idx, slot_idx, field)
                 if len(values) > 2 and values[2] and values[2][0] != MISSING:
-                    players[frame, slot, 2] = float(values[2])
+                    players[frame_idx, slot_idx, 2] = _atd_float(
+                        values, 2, frame_idx, slot_idx, "player_speed")
             group = parts[2]
             if group and group[0] != MISSING:
                 values = group.split(",")
-                ball[frame, 0] = float(values[0])
-                ball[frame, 1] = float(values[1])
+                for column, field in enumerate(("ball_x", "ball_y")):
+                    ball[frame_idx, column] = _atd_float(values, column, frame_idx, None, field)
                 if len(values) > 2 and values[2] and values[2][0] != MISSING:
-                    ball[frame, 2] = float(values[2])
-    if seen != n_frames:
-        log.warning("ATD has %d records for %d video frames", seen, n_frames)
+                    ball[frame_idx, 2] = _atd_float(values, 2, frame_idx, None, "ball_speed")
+    if not seen.all():
+        raise ValueError(f"ATD missing frame_id records: count {int((~seen).sum())}")
     return players, ball
 
 
 def load_match(game: str = GAME, source: str = "tactical", cache: bool = True) -> Match:
-    """The tracking of one recording, cached as .npz in MTAH_WORK_DIR keyed by file size."""
+    """Load tracking; cache identity includes source, raw size/mtime_ns, metadata SHA1,
+    parser version and slot count. Wrong cached array shapes trigger reparsing.
+    """
     meta_path, raw_path = require(["atd_meta", "atd_raw"], game, source=source)
     n_frames = source_frames(source, game)
     team_of_slot = team_of_each_slot(meta_path)
     halves = half_video_blocks(game) if source == "tactical" else []
     pitch_m = GAMES[game]["pitch"]
 
-    key = hashlib.sha1("{}:{}:{}".format(source, os.path.getsize(raw_path),
-                                         len(team_of_slot)).encode()).hexdigest()[:12]
+    raw_stat = Path(raw_path).stat()
+    metadata_sha1 = hashlib.sha1(Path(meta_path).read_bytes()).hexdigest()
+    identity = (source, raw_stat.st_size, raw_stat.st_mtime_ns, metadata_sha1,
+                PARSER_VERSION, len(team_of_slot))
+    key = hashlib.sha1(repr(identity).encode()).hexdigest()
     cache_path = work_dir() / "atd_{}_{}.npz".format(source, key)
+    players = ball = None
     if cache and cache_path.exists():
-        with np.load(cache_path) as blob:
-            players, ball = blob["players"], blob["ball"]
-    else:
+        try:
+            with np.load(cache_path, allow_pickle=False) as blob:
+                cached_players, cached_ball = blob["players"], blob["ball"]
+            if (cached_players.shape == (n_frames, len(team_of_slot), 3)
+                    and cached_ball.shape == (n_frames, 3)):
+                players, ball = cached_players, cached_ball
+        except (ValueError, OSError, KeyError, EOFError):
+            pass  # Invalid caches are disposable; source parsing remains authoritative.
+    if players is None:
         players, ball = parse_atd(raw_path, n_frames, len(team_of_slot))
         if cache:
             np.savez_compressed(cache_path, players=players, ball=ball)

@@ -13,7 +13,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from possession import decoder, evidence, features, io, structure
+from possession import evidence, features, io, structure
+from run import decode_blocks, load_tags
 from evaluation import possession_metrics as pm
 from games import GAME, half_video_blocks
 
@@ -45,11 +46,12 @@ def main() -> int:
             parser.error('--evidence-cache must be a plain .npy filename')
         cache = io.work_dir() / name
     started = time.perf_counter()
+    feats = features.compute(io.load_match(), load_tags(config))
     if cache is not None and cache.exists():
         log_evidence = np.load(cache, allow_pickle=False)
         print('reused evidence cache; caller must ensure evidence config matches')
     else:
-        log_evidence = evidence.scores(features.compute(io.load_match()), config.get('evidence'))
+        log_evidence = evidence.scores(feats, config.get('evidence'))
         if cache is not None:
             np.save(cache, log_evidence, allow_pickle=False)
     print('evidence frames={} elapsed_s={:.3f}'.format(len(log_evidence), time.perf_counter()-started))
@@ -57,24 +59,28 @@ def main() -> int:
     full_runs = [(first, last + 1) for _, first, last in half_video_blocks(GAME)]
     duration = 2 if args.duration else config['decoder'].get('min_duration_frames', 1)
     print('team_switch to_dead from_dead spellF1 macroF1 public_possessions full_possessions mean_duration_s decode_s duration')
-    best = None
     for team, to_dead, from_dead in itertools.product(args.team_switch, args.to_dead, args.from_dead):
-        cost = decoder.switch_matrix(team, to_dead, from_dead)
+        run_config = dict(config, decoder=dict(config['decoder']))
+        run_config['decoder'].update(
+            switch_cost=dict(team_switch=team, to_dead=to_dead, from_dead=from_dead),
+            min_duration_frames=duration)
         started = time.perf_counter()
-        codes = structure.decode_halves(log_evidence, lambda e: decoder.decode(
-            e, cost, min_duration_frames=duration))
+
+        def decode_block(block, start):
+            block_feats = {name: value[start:start + len(block)] for name, value in feats.items()}
+            return decode_blocks(block, [(0, len(block) - 1)], run_config, block_feats)
+
+        codes = structure.decode_halves(log_evidence, decode_block)
         elapsed = time.perf_counter() - started
-        result = pm.evaluate(gt, codes, bootstrap_n=0)
+        result = pm.evaluate(gt, codes, bootstrap_n=args.bootstrap)
         stats = pm.possession_stats(codes, full_runs)
         print('{:g} {:g} {:g} {:.6f} {:.6f} {} {} {:.3f} {:.3f} {}'.format(
             team, to_dead, from_dead, result['spell_f1_mean'], result['macro_f1'],
             result['n_pred_spells'], stats['n_spells'], stats['mean_duration_s'], elapsed, duration), flush=True)
-        if best is None or result['spell_f1_mean'] > best[0]:
-            best = (result['spell_f1_mean'], (team, to_dead, from_dead), codes)
-    result = pm.evaluate(gt, best[2], bootstrap_n=args.bootstrap)
-    print('best costs={} spellF1={:.6f} bootstrap={} CI=[{:.6f},{:.6f}] macroF1={:.6f}'.format(
-        best[1], best[0], args.bootstrap, result['spell_bootstrap_low'],
-        result['spell_bootstrap_high'], result['macro_f1']))
+        print('  bootstrap={} spell_CI=[{:.6f},{:.6f}] macro_CI=[{:.6f},{:.6f}]'.format(
+            args.bootstrap, result['spell_bootstrap_low'], result['spell_bootstrap_high'],
+            result['bootstrap_low'], result['bootstrap_high']))
+    print('Public sweeps are diagnostics only; parameter selection uses IDSSE.')
     print('Only 17 public possessions: differences below 0.05 cannot select variants reliably.')
     return 0
 

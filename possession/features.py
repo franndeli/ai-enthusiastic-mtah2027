@@ -175,8 +175,8 @@ def team_shape_features(match: Match) -> dict:
             mask = match.team_of_slot == team
             xy = match.players_xy[:, mask, :]
             sp = speed[:, mask]
-            out["{}_centroid_x".format(name)] = np.nanmean(xy[:, :, 0], axis=1).astype(np.float32)
-            out["{}_centroid_y".format(name)] = np.nanmean(xy[:, :, 1], axis=1).astype(np.float32)
+            out["{}_centroid_x_norm".format(name)] = np.nanmean(xy[:, :, 0], axis=1).astype(np.float32)
+            out["{}_centroid_y_norm".format(name)] = np.nanmean(xy[:, :, 1], axis=1).astype(np.float32)
             out["{}_spread_m".format(name)] = (np.nanstd(xy[:, :, 0], axis=1)
                                                * match.pitch_m[0]).astype(np.float32)
             out["{}_mean_speed_m_s".format(name)] = np.nanmean(sp, axis=1).astype(np.float32)
