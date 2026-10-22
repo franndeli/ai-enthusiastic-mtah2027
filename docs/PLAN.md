@@ -12,7 +12,10 @@ Only mark done when acceptance evidence is recorded. Evidence is aggregate only 
 | B0 | done | Reproduce the baselines (2026-10-22: `scripts/py starter/baseline.py` byte-identical to the committed files, 1.7 s; public board reproduced) | `scripts/py starter/baseline.py` regenerates the four baselines; `scripts/py evaluation/run_evaluation.py` reproduces the README scoreboard on the public 5 minutes. |
 | B1 | ready | Understand the scorer and the public ground truth | From public files only: summarise the 17 public possessions (durations, `D` stretches, hand-overs) and how spellF1 reacts to fragmentation, smoothing and `X`. Notes in `docs/research/`. |
 | B2 | ready | Data audit (aggregate only) | A script prints coverage statistics: ball visibility per half, track slot counts, any ownership/alive fields in the ATD, Smart Tagging class counts, homography validity. No rows printed. |
-| E1 | blocked on B0 | First method beyond nearest-player smoothing | Proposal with a hypothesis and the measured public-5-min spellF1/macroF1 with bootstrap intervals; reproducible command. |
+| E1 | done | First method beyond nearest-player smoothing | v3c, see W1 results: public spellF1 0.6000 [0.386, 0.782] (baseline 0.3256), IDSSE noisy 0.345, `scripts/py run.py`. |
+| E2 | ready | Short possessions | We predict 11 of 17 public possessions and 264 on the full match (public rate extrapolates to ~360): find evidence that reacts within ~0.5 s to a clean turnover without flicker; judge on IDSSE clean/noisy spellF1 and on public possession count. |
+| E3 | ready | Learned evidence with domain adaptation | Coarsen IDSSE labels (merge spells < ~2 s into the previous owner, D share) towards our granularity, retrain, re-judge (D006 revisit condition). |
+| E4 | ready | Technical document polish + team name + public repo push | `docs/TECHNICAL.md` exported as `<team>.pdf`; repo pushed; `git ls-files` audit per DATA_POLICY. |
 
 ## S0 — pipeline skeleton (coordinator), 2026-10-22
 
@@ -69,6 +72,25 @@ Workers report changed files, test results and aggregate scores only.
   (+-0.003) and within noise on public; 6/6/6 kept.
 - **Dead ball is the next gap.** Public D recall 0.49 at precision 0.84 (11% predicted vs 20%
   true); same pattern on IDSSE. T8 dispatched.
+- **T8 done (accepted).** Dead-ball onset was a median 3.2 s late (IDSSE); added a 3 s speed
+  look-ahead and a ball-exit clue. Public D P/R 0.84/0.49 -> 0.87/0.65, spell 0.594 -> 0.613,
+  macro 0.772 -> 0.824; IDSSE clean/noisy 0.405/0.332, D F1 0.882/0.852; full-match D share 39%.
+  IDSSE's ball is frozen during dead time, so ball-based dead clues cannot be validated there.
+- **T9 done (compliance).** Shape weights refit on IDSSE only (supervised, pooled, clean):
+  len 0.110, width 1.687, speed -0.535, vel 0.484. Public 0.613 -> 0.600 [0.39, 0.78], macro
+  0.827; transplant 0.54/0.43; tc10 0.49 -> 0.42 (17-possession noise); IDSSE clean/noisy
+  0.414/0.345 (up). Nothing is fitted on the match any more (reviewed).
+- **T5 done: learned evidence NOT adopted** (D006). IDSSE LOMO noisy 0.332 -> 0.436, clean
+  0.405 -> 0.547, but on our match 509 possessions / public 0.366 at config costs; equal to the
+  rules only after x6 switch costs. Model 2.1 MB, sha256 reproduced 4 times (~7 min training).
+- **T10/T11 done.** Independent review (`.orchestration/w1/REVIEW.md`): sanitised data-boundary
+  failures, strict frame-id parsing, versioned cache key, one `decode_blocks` entry point shared
+  by production and IDSSE evaluators, diagnostic-only sweeps, tests 85 -> 94. Byte-identical
+  output before/after; cold-cache and warm-cache runs identical (sha256 374f198f...).
+- **Submission candidate `ai-enthusiastic.csv` (v3c)**: valid; public spellF1 0.6000 [0.386,
+  0.782], macroF1 0.8271; 11 public possessions (17 true: short spells under-detected); full
+  match 264 possessions, 14.6 s mean, 31% D of all frames (39% of graded). Regenerate:
+  `scripts/py run.py --out evaluation/results/ai-enthusiastic.csv`.
 - **T6 done: W7a NO-GO.** 31 of 253 broadcast runs aligned (602 s), 313 of 64,643 tactical gap
   frames recovered (0.48%); both-visible ball disagreement median 2.6 m, p90 9.6 m; player residual
   after alignment 0.8 m median (11.9 m before). Conservative aligner; a looser one is not worth

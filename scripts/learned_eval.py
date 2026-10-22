@@ -108,12 +108,12 @@ def idsse_table(ids: list[str], folds: dict, config: dict, weight: float, scales
                                         for r in results[kind].values()])) for n in names))
 
 
-def our_match_table(final: learned.LearnedModel, config: dict, weight: float, scale: float,
-                    bootstrap: int, seeds: int) -> None:
+def our_match_table(final: learned.LearnedModel, config: dict, weight: float,
+                    scales: dict, bootstrap: int, seeds: int) -> None:
     match, gt, tags = io.load_match(), io.load_public_gt(), load_tags(config)
     print("\nour match: public window and stress masks (spellF1 mean / min, macroF1, possessions)")
     for name, scorer in make_scorers(final, config, weight).items():
-        run_config = config if name == "rules" else scaled_config(config, scale)
+        run_config = scaled_config(config, scales.get(name, 1.0))
         with patched_evidence(scorer), warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             codes = label_codes_from_config(run_config, match, tags)
@@ -140,18 +140,28 @@ def main() -> int:
     parser.add_argument("--switch-scales", type=float, nargs="+", default=[1.0],
                         help="IDSSE: decoder switch-cost factors tried for learned/blend")
     parser.add_argument("--our-scale", type=float, default=1.0,
-                        help="our match: switch-cost factor for learned/blend")
+                        help="our match: switch-cost factor for learned")
+    parser.add_argument("--blend-scale", type=float, default=1.0,
+                        help="our match: switch-cost factor for the blend")
+    parser.add_argument("--no-idsse", action="store_true",
+                        help="skip leave-one-match-out; use the model file (--model or default)")
+    parser.add_argument("--model", type=Path, default=None)
     parser.add_argument("--bootstrap", type=int, default=0)
     parser.add_argument("--seeds", type=int, default=5, help="transplant mask seeds")
     parser.add_argument("--no-ours", action="store_true")
     args = parser.parse_args()
     config = load_config(args.config)
     ids = args.matches or cached_matches()
-    final, folds = learned.fit_with_calibration(build_rows(ids))
-    print("temperature {}".format(final.temperature))
-    idsse_table(ids, folds, config, args.weight, args.switch_scales, args.bootstrap)
+    if args.no_idsse:
+        final = learned.load_model(args.model or learned.default_model_path())
+    else:
+        final, folds = learned.fit_with_calibration(build_rows(ids))
+        print("temperature {}".format(final.temperature))
+        idsse_table(ids, folds, config, args.weight, args.switch_scales, args.bootstrap)
     if not args.no_ours:
-        our_match_table(final, config, args.weight, args.our_scale, args.bootstrap, args.seeds)
+        our_match_table(final, config, args.weight,
+                        {"learned": args.our_scale, "blend": args.blend_scale},
+                        args.bootstrap, args.seeds)
     return 0
 
 

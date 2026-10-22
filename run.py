@@ -79,12 +79,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="submission CSV to write")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
+    parser.add_argument("--no-cache", action="store_true",
+                        help="re-parse the tracking instead of using the cached arrays")
     args = parser.parse_args()
 
     try:
         started = time.time()
         config = load_config(Path(args.config))
-        match = io.load_match()
+        match = io.load_match(cache=not args.no_cache)
         print("loaded tracking: {} frames x {} slots in {:.1f}s".format(
             match.n_frames, match.n_slots, time.time() - started))
 
