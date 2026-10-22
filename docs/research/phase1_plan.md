@@ -251,7 +251,7 @@ same team** (Fortuna Düsseldorf), so there is less variety than "7 matches" sug
 | **Check 1: "other matches"** | Each time, we keep one Bundesliga match out of the learning and test on it | Yes | Did the program learn the *concept*? (biased for our match, see below) |
 | **Check 2: "public window"** | The 5 public minutes of our match, as they are | Yes | Only: is the program *correct* (right frames, right letters, right file)? |
 | **Check 3: "public window, ball hidden"** | The same 5 minutes, with the ball artificially hidden using real gap patterns from the rest of our match | Yes | Does it survive the hard situation? |
-| **Check 4 (optional): "hand-labelled minutes"** | ~12 extra minutes of our match where **two teammates watch the video and write the correct letters**, independently | Yes, made by us | An extra practice exam on *our* match. Never fed to the program, never submitted. |
+| ~~Check 4: hand-labelled minutes~~ | **Dropped 2026-10-22**: the organisers ruled (issue #8) that the competition match may not be labelled at all, by hand or automatically, not even for validation. | — | — |
 
 **Why we damage the Bundesliga data.** Their tracking is clean; ours is not. If the program learned
 on clean data, it would expect a perfect world. So before learning we hide their ball in long gaps of
@@ -271,7 +271,7 @@ statistics, learned model) comes from the Bundesliga matches or from football re
 | 1. Other matches | yes (~2,000 possessions) | no | **optimistic**: different league, cleaner data, noise imitated by us |
 | 2. Public window | no (17) | yes | **optimistic**: ball visible 88% instead of 59% |
 | 3. Public window, ball hidden | no | yes, but artificial gaps | unknown direction |
-| 4. Hand-labelled minutes | small (~40–60) | yes | closest to fair, but humans may label slightly differently from the official key |
+| ~~4. Hand-labelled minutes~~ | dropped (not allowed) | | |
 
 **No check is both big and from our match.** So we never read one number and say "this is our
 score". Section 8 explains how we decide anyway.
@@ -385,7 +385,6 @@ at the **direction** of the change on every check, not at one number:
   about ±0.05.
 - **Check 2 (public window)** must stay correct; small differences there are ignored.
 - **Check 3 (ball hidden)** must not collapse.
-- **Check 4 (hand-labelled minutes)**, if we do it, must not get worse.
 - **Shape check on the full match** (no answers needed): believable number and lengths of
   possessions, no endless or tiny ones.
 
@@ -478,7 +477,7 @@ What it means for us:
 | W3 | Bundesliga data: download, damage it to look like ours, learn version 2 | Beats version 1 by the rule in section 8 |
 | W4 | HSMM upgrade | Beats the HMM by the rule in section 8 |
 | W5 | The checking tool: one command, all checks | Used for every decision |
-| W6 | (optional) Hand-labelling of ~12 minutes by two people | The two people agree with each other, and with the public 5 minutes |
+| ~~W6~~ | Hand-labelling dropped: not allowed on the competition match (organisers, issue #8, 2026-10-22) | — |
 | W7a | **Broadcast tracking as a second ball source (parallel, week 1)**: align the two clocks by player formations, measure how many tactical gap frames the broadcast ball covers (section 5) | Aggregate coverage number printed; go if it covers a meaningful share of gap frames (threshold set before running: ≥ 15%) |
 | W7 | Video ball test (parallel, week 1–2, only if W7a is not enough), then ball recovery if it passes | Decision rule of section 7, step 4 |
 | W8 | Reproducibility + technical document | Same file twice; checker OK |
@@ -512,7 +511,7 @@ clues"). Confirm the registered head-count before assigning roles.
 | Storyteller | W1, W4 | likes logic and probabilities |
 | Football clues | W2, checks that rules make football sense | the football fan |
 | Learning from Bundesliga | W3 | most ML experience |
-| Checks | W5, W6 coordination, shape checks | careful and methodical |
+| Checks | W5, shape checks | careful and methodical |
 | Video ball | W7, then technical document | curious, likes images |
 
 ### Budget
@@ -553,17 +552,17 @@ full match everyone will score lower.
 
 ### Open questions (we do not contact the organisers for now; we design around them)
 
-1. How many hand-labelled minutes count as "small" for checking (issue #8, unanswered)? Check 4
-   stays optional and small.
-2. May weights learned from the match video be published, and may re-running need a GPU (issue #2,
-   unanswered)? The video track stays optional, so our submission never depends on it.
+1. ~~How many hand-labelled minutes count as "small"~~ Answered 2026-10-22: none on this match; any amount on other matches. Also answered (issue #2): no model may be fitted on the competition match even with automatic labels; weights trained on external data may be published; GPU and runtime are unrestricted.
+2. ~~May weights learned from the match video be published~~ Answered: no model may be trained on
+   the match (any labels); a detector would have to be trained on external footage. The video
+   track is therefore external-data-only if ever revived.
 3. May the match video be processed on a rented cloud GPU under the data terms? Default: process it
    on our own laptops.
 
 ### Decisions needed from the team
 
 1. Approve installing `scikit-learn` (the library for version 2).
-2. Hand-labelled minutes (W6): yes or no.
+2. ~~Hand-labelled minutes (W6)~~ not allowed; dropped.
 3. Confirm the registered team size (3–5 by the rules) and assign the roles.
 4. ~~Download the data~~ Done 2026-10-22; all nine assets present.
 5. Allow a small model file learned from **public** data only (Bundesliga) in the repository, with

@@ -55,6 +55,20 @@ Workers report changed files, test results and aggregate scores only.
 - **T4 built, blocked then unblocked.** Loader/noise/eval tested on synthetic data (25 tests OK).
   figshare WAF rejects a browser-like User-Agent from scripts; honest UA works. Download running;
   T4b runs the real files.
+- **T4b done.** All 7 IDSSE matches load with kloppy (56-63 s each, cached 0.2 s); labels
+  lossless (BallPossession only 1/2). Semantics differ from our public window: D share 41-52%
+  (ours 19.6% in the first 5 minutes), spells mean 5.5-9.2 s with 25-37% under 2 s (ours 14.2 s
+  mean, 35% under 4 s); team swaps 60-67% of transitions (ours 60%). Use IDSSE for robustness and
+  relative comparisons, not to set our switching rate.
+- **T7 done (accepted).** Ball-free team-shape evidence (attack direction inferred from
+  goalkeepers per half; z-scored length/width/speed/drift differences, weights fitted
+  self-supervised on clear-control frames of the same match, no ground truth). Public native
+  0.4914 -> 0.5935 [0.40, 0.77], macro 0.7724; transplant 0.42 -> 0.54 (min 0.46); tc5/10/20
+  0.41 / 0.47 / 0.48; full match 275 possessions, 15.8 s. IDSSE clean 0.377 (unchanged), noisy
+  0.259 -> 0.308. 77 tests. Decoder-cost sweep (6/6/6, 3/3/3, 2/4/4, 4/6/3): inert on IDSSE
+  (+-0.003) and within noise on public; 6/6/6 kept.
+- **Dead ball is the next gap.** Public D recall 0.49 at precision 0.84 (11% predicted vs 20%
+  true); same pattern on IDSSE. T8 dispatched.
 - **T6 done: W7a NO-GO.** 31 of 253 broadcast runs aligned (602 s), 313 of 64,643 tactical gap
   frames recovered (0.48%); both-visible ball disagreement median 2.6 m, p90 9.6 m; player residual
   after alignment 0.8 m median (11.9 m before). Conservative aligner; a looser one is not worth
