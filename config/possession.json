@@ -1,4 +1,5 @@
 {
+  "_shape_provenance": "shape_* weights: pooled logistic regression on the 7 IDSSE matches (external, CC-BY 4.0), regenerate with scripts/py scripts/fit_shape_weights.py",
   "_purpose": "Parameters of the possession pipeline (run.py). Version experiments by changing values here and recording results in docs/PLAN.md, not by copying files.",
   "evidence": {
     "w_control": 1.5,
@@ -6,10 +7,10 @@
     "gap_decay_s": 5.0,
     "gap_control_below": 0.3,
     "w_shape": 0.3,
-    "shape_len": 1.46,
-    "shape_width": 1.16,
-    "shape_speed": -0.4,
-    "shape_vel": 0.57,
+    "shape_len": 0.11,
+    "shape_width": 1.687,
+    "shape_speed": -0.535,
+    "shape_vel": 0.484,
     "w_restart_team": 0.0,
     "team_confidence_max": 0.75,
     "dead_bias": -1.2,

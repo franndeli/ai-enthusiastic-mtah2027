@@ -27,10 +27,13 @@ DEFAULT_PARAMS = {
     "gap_decay_s": 5.0,            # their influence fades with distance in time (seconds)
     "gap_control_below": 0.3,      # "unclear" means |control_balance| below this
     "w_shape": 0.3,                # ball-free team shape evidence (overall scale; 0 = off)
-    "shape_len": 1.46,             # relative weights of the z-scored home-minus-away differences,
-    "shape_width": 1.16,           # fitted by logistic regression on clear-control frames
-    "shape_speed": -0.40,          # (self-supervised: no ground truth involved)
-    "shape_vel": 0.57,
+    # relative weights of the z-scored home-minus-away differences: logistic regression on the 7
+    # IDSSE matches (external open data, CC-BY 4.0), supervised on their H/A labels, clean tracking,
+    # pooled. Regenerate: scripts/py scripts/fit_shape_weights.py (nothing is fitted on the target match)
+    "shape_len": 0.110,
+    "shape_width": 1.687,
+    "shape_speed": -0.535,
+    "shape_vel": 0.484,
     "w_restart_team": 0.0,         # team taking a tagged set piece owns the ball right after it
     "team_confidence_max": 0.75,   # |team logit| <= logit(this)
     # --- dead-ball evidence ---
