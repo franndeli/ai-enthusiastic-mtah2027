@@ -24,8 +24,12 @@ BALL_SPEED_HALF_SPAN = 2         # ball speed is measured over positions this ma
 BALL_WINDOW_FRAMES = FPS         # out-of-bounds share is taken over 1 s
 SHAPE_WINDOW_FRAMES = 2 * FPS    # team speed is smoothed over 2 s
 PLAYER_SLOW_M_S = 0.5
+SHAPE_SMOOTH_FRAMES = 2 * FPS    # ball-free shape differences are smoothed over 2 s
+SHAPE_VEL_HALF_SPAN = 4 * FPS    # block velocity compares positions 4 s either side
+SHAPE_Z_CLIP = 3.0
 SET_PIECE_CODE = "set pieces"
 RESTART_SIGMA_FRAMES = FPS       # width of the restart bump around the end of a set-piece window
+RESTART_TEAM_AFTER_FRAMES = 4 * FPS  # the team taking a set piece is the likely owner this long after it
 
 
 def _dist_m(a_xy: np.ndarray, b_xy: np.ndarray, pitch_m) -> np.ndarray:
@@ -159,15 +163,104 @@ def team_shape_features(match: Match) -> dict:
     return out
 
 
+def _row_percentiles(values: np.ndarray, quantiles) -> np.ndarray:
+    """Per-row percentiles ignoring NaN, vectorised (np.nanpercentile loops in Python per row).
+    Nearest-rank on the sorted valid values; NaN rows stay NaN. Returns (len(quantiles), n)."""
+    ordered = np.sort(values, axis=1)               # NaN sorts last
+    count = np.sum(~np.isnan(values), axis=1)
+    rows = np.arange(values.shape[0])
+    out = []
+    for q in quantiles:
+        rank = np.clip(np.round(q / 100.0 * (count - 1)).astype(int), 0, None)
+        picked = ordered[rows, np.minimum(rank, values.shape[1] - 1)]
+        out.append(np.where(count > 0, picked, np.nan))
+    return np.stack(out)
+
+
+def attack_direction(match: Match) -> np.ndarray:
+    """+1 where HOME attacks towards +x, -1 towards -x, 0 outside the graded halves.
+
+    Inferred per half from where each team keeps its goalkeeper: the side whose line-most
+    player sits closest to the goal line (median over the half) is the side that team defends.
+    Both teams are inferred and must agree, otherwise the half is left at 0 (no shape evidence).
+    """
+    direction = np.zeros(match.n_frames, dtype=np.float32)
+    for _, first, last in match.halves:
+        defends_left = {}
+        for name, team in (("home", HOME), ("away", AWAY)):
+            x = match.players_xy[first:last + 1, match.team_of_slot == team, 0]
+            with warnings.catch_warnings(), np.errstate(all="ignore"):
+                warnings.simplefilter("ignore", RuntimeWarning)
+                left = np.nanmedian(np.nanmin(x, axis=1))
+                right = 1.0 - np.nanmedian(np.nanmax(x, axis=1))
+            defends_left[name] = bool(left < right)
+        if defends_left["home"] != defends_left["away"]:
+            direction[first:last + 1] = 1.0 if defends_left["home"] else -1.0
+    return direction
+
+
+def _robust_z(values: np.ndarray, graded: np.ndarray) -> np.ndarray:
+    """Centre on the median and scale by the std over graded frames: removes a team's constant
+    style (always wider, always longer) so that only the home-away difference in time remains."""
+    ref = values[graded & ~np.isnan(values)]
+    if len(ref) < 2 or ref.std() < 1e-6:
+        return np.full(values.shape, np.nan, dtype=np.float32)
+    z = np.clip((values - np.median(ref)) / ref.std(), -SHAPE_Z_CLIP, SHAPE_Z_CLIP)
+    return z.astype(np.float32)
+
+
+def ball_free_shape_features(match: Match) -> dict:
+    """Home-minus-away differences that need no ball, as z-scores (positive favours home).
+
+    Attackers stretch the pitch: the team in possession is longer (front line minus back line along
+    its attack direction) and wider, the defending team runs more, and the whole block drifts
+    towards the possessor's goal. Measured against clear-control frames this separates the teams
+    well; it is the only team signal left while the ball is unseen.
+    shape_len_z, shape_width_z, shape_speed_z, shape_vel_z; NaN where the direction is unknown.
+    """
+    direction = attack_direction(match)
+    graded = match.graded_mask() & (direction != 0)
+    xy, speed = match.players_xy, match.players_speed
+    length, width, mean_speed = {}, {}, {}
+    with warnings.catch_warnings(), np.errstate(all="ignore"):
+        warnings.simplefilter("ignore", RuntimeWarning)
+        for team in (HOME, AWAY):
+            side = 1.0 if team == HOME else -1.0
+            mask = match.team_of_slot == team
+            along = xy[:, mask, 0] * (direction * side)[:, None]
+            lines = _row_percentiles(along, (10, 90))
+            length[team] = lines[1] - lines[0]
+            width[team] = np.nanstd(xy[:, mask, 1], axis=1) * match.pitch_m[1]
+            mean_speed[team] = np.nanmean(speed[:, mask], axis=1)
+        block_x = np.nanmean(xy[:, :, 0], axis=1)
+    span = SHAPE_VEL_HALF_SPAN
+    block_smooth = _moving_mean(block_x.astype(np.float64), FPS)
+    velocity = np.full(match.n_frames, np.nan)
+    velocity[span:-span] = (block_smooth[2 * span:] - block_smooth[:-2 * span]) / (2 * span / FPS)
+    diffs = {"shape_len_z": length[HOME] - length[AWAY],
+             "shape_width_z": width[HOME] - width[AWAY],
+             "shape_speed_z": mean_speed[HOME] - mean_speed[AWAY],
+             "shape_vel_z": velocity * direction}
+    out = {}
+    for name, diff in diffs.items():
+        smooth = _moving_mean(np.where(direction != 0, diff, np.nan).astype(np.float64),
+                              SHAPE_SMOOTH_FRAMES)
+        out[name] = _robust_z(smooth, graded)
+    return out
+
+
 def tagging_features(tags: list, n_frames: int) -> dict:
     """Soft priors from Smart Tagging instances ({code, start_frame, end_frame, team, type}).
 
     tag_set_piece: 1 inside a 'set pieces' window (any type), else 0.
     restart_prior: bump in 0..1 centred on the end of a set-piece window (the likely restart), for
         the decoder to make leaving D cheaper there.
+    restart_team: +1 / -1 from 1 s before to 4 s after the end of a set-piece window whose tag
+        names HOME / AWAY (the taker owns the ball afterwards); 0 otherwise. Throw-ins carry no team.
     """
     set_piece = np.zeros(n_frames, dtype=np.float32)
     restart = np.zeros(n_frames, dtype=np.float32)
+    restart_team = np.zeros(n_frames, dtype=np.float32)
     idx = np.arange(n_frames)
     for tag in tags:
         if tag["code"] != SET_PIECE_CODE:
@@ -176,8 +269,10 @@ def tagging_features(tags: list, n_frames: int) -> dict:
         if last < first:
             continue
         set_piece[first:last + 1] = 1.0
+        taker = {HOME: 1.0, AWAY: -1.0}.get(tag["team"], 0.0)
+        restart_team[max(first, last - FPS):last + RESTART_TEAM_AFTER_FRAMES + 1] = taker
         np.maximum(restart, np.exp(-0.5 * ((idx - last) / RESTART_SIGMA_FRAMES) ** 2), out=restart)
-    return {"tag_set_piece": set_piece, "restart_prior": restart}
+    return {"tag_set_piece": set_piece, "restart_prior": restart, "restart_team": restart_team}
 
 
 def compute(match: Match, tags: list | None = None) -> dict:
@@ -189,6 +284,7 @@ def compute(match: Match, tags: list | None = None) -> dict:
                                           BALL_WINDOW_FRAMES).astype(np.float32)
     feats.update(team_memory_features(feats["control_balance"]))
     feats.update(team_shape_features(match))
+    feats.update(ball_free_shape_features(match))
     if tags is not None:
         feats.update(tagging_features(tags, match.n_frames))
     return feats

@@ -87,6 +87,46 @@ class TeamEvidenceTests(unittest.TestCase):
         np.testing.assert_allclose(ev[:, H], np.log(1 - np.exp(d_ctrl)), rtol=1e-4)
 
 
+class ShapeEvidenceTests(unittest.TestCase):
+    n = 50
+
+    def shape_features(self, **z):
+        f = flat_features(self.n)
+        for name in ("len", "width", "speed", "vel"):
+            f["shape_%s_z" % name] = np.full(self.n, z.get(name, 0.0), np.float32)
+        return f
+
+    def test_longer_wider_home_team_is_home_evidence(self):
+        pref = team_pref(E.scores(self.shape_features(len=2.0, width=1.0)))
+        self.assertTrue((pref > 0).all())
+        pref = team_pref(E.scores(self.shape_features(len=-2.0, width=-1.0)))
+        self.assertTrue((pref < 0).all())
+
+    def test_faster_home_team_is_away_evidence(self):
+        self.assertTrue((team_pref(E.scores(self.shape_features(speed=2.0))) < 0).all())
+
+    def test_shape_speaks_while_ball_is_unseen(self):
+        f = self.shape_features(len=2.0)
+        f["ball_present"][:] = 0
+        f["control_balance"][:] = np.nan
+        self.assertTrue((team_pref(E.scores(f)) > 0).all())
+
+    def test_shape_is_switchable_and_absent_features_are_ignored(self):
+        f = self.shape_features(len=3.0, vel=3.0)
+        np.testing.assert_allclose(team_pref(E.scores(f, {"w_shape": 0.0})), 0.0, atol=1e-6)
+        self.assertEqual(E.scores(flat_features(3)).shape, (3, 3))
+
+    def test_shape_is_capped_like_any_team_evidence(self):
+        pref = team_pref(E.scores(self.shape_features(len=3.0, width=3.0), {"w_shape": 50.0}))
+        np.testing.assert_allclose(pref, np.log(0.75 / 0.25), rtol=1e-4)
+
+    def test_restart_team_evidence_is_switchable(self):
+        f = flat_features(self.n)
+        f["restart_team"] = np.full(self.n, -1.0, np.float32)
+        np.testing.assert_allclose(team_pref(E.scores(f)), 0.0, atol=1e-6)
+        self.assertTrue((team_pref(E.scores(f, {"w_restart_team": 1.0})) < 0).all())
+
+
 class DeadEvidenceTests(unittest.TestCase):
     n = 50
 

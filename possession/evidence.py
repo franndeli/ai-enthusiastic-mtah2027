@@ -26,6 +26,12 @@ DEFAULT_PARAMS = {
     "w_gap": 1.0,                  # last / next clear controller where control is unclear
     "gap_decay_s": 5.0,            # their influence fades with distance in time (seconds)
     "gap_control_below": 0.3,      # "unclear" means |control_balance| below this
+    "w_shape": 0.3,                # ball-free team shape evidence (overall scale; 0 = off)
+    "shape_len": 1.46,             # relative weights of the z-scored home-minus-away differences,
+    "shape_width": 1.16,           # fitted by logistic regression on clear-control frames
+    "shape_speed": -0.40,          # (self-supervised: no ground truth involved)
+    "shape_vel": 0.57,
+    "w_restart_team": 0.0,         # team taking a tagged set piece owns the ball right after it
     "team_confidence_max": 0.75,   # |team logit| <= logit(this)
     # --- dead-ball evidence ---
     "dead_bias": -1.2,             # log-odds of dead on a frame with no clue
@@ -60,6 +66,14 @@ def team_logit(features: dict, p: dict) -> np.ndarray:
     memory = (features["last_team_sign"] * np.exp(-features["frames_since_team"] / tau)
               + features["next_team_sign"] * np.exp(-features["frames_until_team"] / tau))
     z = z + np.where(np.abs(balance) < p["gap_control_below"], p["w_gap"] * memory, 0.0)
+
+    if p["w_shape"] and "shape_len_z" in features:
+        shape = sum(p["shape_" + k] * _zero_nan(features["shape_" + k + "_z"])
+                    for k in ("len", "width", "speed", "vel"))
+        z = z + p["w_shape"] * shape
+
+    if "restart_team" in features:
+        z = z + p["w_restart_team"] * features["restart_team"]
 
     cap = _logit(p["team_confidence_max"])
     return np.clip(z, -cap, cap)

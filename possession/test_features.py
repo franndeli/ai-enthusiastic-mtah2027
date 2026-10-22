@@ -160,5 +160,90 @@ class StoppageAndTagTests(unittest.TestCase):
             self.assertEqual(values.dtype, np.float32, name)
 
 
+def two_team_match(n=400, flip=False, home_len=40.0, away_len=25.0, halves=None):
+    """11 v 11 with goalkeepers near their goal lines; HOME defends left unless flip.
+    Outfield players span `*_len` metres along x (100 m pitch), width 30 m."""
+    rng = np.random.RandomState(0)
+    players = np.zeros((n, 22, 2), np.float32)
+    for team, length in ((0, home_len), (1, away_len)):
+        x = 0.05 + 0.9 * 0 + np.linspace(0.12, 0.12 + length / 100.0, 11)
+        x[0] = 0.04                                    # goalkeeper
+        y = np.linspace(0.2, 0.8, 11)
+        xs = (1 - x) if team == 1 else x               # AWAY defends the right
+        if flip:
+            xs = 1 - xs
+        players[:, team * 11:(team + 1) * 11, 0] = xs
+        players[:, team * 11:(team + 1) * 11, 1] = y + rng.uniform(-0.01, 0.01, (n, 11))
+    slots = np.array([HOME] * 11 + [AWAY] * 11, np.int8)
+    return Match(players_xy=players, players_speed=np.full((n, 22), 2.0, np.float32),
+                 ball_xy=np.full((n, 2), np.nan, np.float32),
+                 ball_speed=np.full(n, np.nan, np.float32), team_of_slot=slots,
+                 halves=halves or [(1, 0, n - 1)], pitch_m=PITCH)
+
+
+class ShapeTests(unittest.TestCase):
+    def test_attack_direction_from_goalkeepers(self):
+        np.testing.assert_array_equal(np.unique(F.attack_direction(two_team_match())), [1.0])
+        np.testing.assert_array_equal(np.unique(F.attack_direction(two_team_match(flip=True))), [-1.0])
+
+    def test_attack_direction_flips_between_halves_and_is_zero_outside(self):
+        match = two_team_match(halves=[(1, 0, 99), (2, 200, 299)])
+        match.players_xy[200:, :, 0] = 1 - match.players_xy[200:, :, 0]  # sides swap at half-time
+        direction = F.attack_direction(match)
+        self.assertEqual(float(direction[50]), 1.0)
+        self.assertEqual(float(direction[250]), -1.0)
+        self.assertEqual(float(direction[150]), 0.0)
+
+    def test_disagreeing_goalkeepers_give_no_direction(self):
+        match = two_team_match()
+        match.players_xy[:, 11:, 0] = match.players_xy[:, :11, 0]  # both teams "defend" left
+        self.assertTrue((F.attack_direction(match) == 0).all())
+
+    def test_longer_team_favours_itself_and_mirror_gives_same_z(self):
+        # the home team is longer for the first half of the recording, the away team after
+        n = 400
+        a = two_team_match(n, home_len=45.0, away_len=25.0)
+        b = two_team_match(n, home_len=25.0, away_len=45.0)
+        a.players_xy[n // 2:] = b.players_xy[n // 2:]
+        z = F.ball_free_shape_features(a)["shape_len_z"]
+        self.assertGreater(float(z[n // 4]), 0.5)
+        self.assertLess(float(z[3 * n // 4]), -0.5)
+        mirror = two_team_match(n, flip=True, home_len=45.0, away_len=25.0)
+        mirror.players_xy[n // 2:] = two_team_match(n, flip=True, home_len=25.0,
+                                                    away_len=45.0).players_xy[n // 2:]
+        zm = F.ball_free_shape_features(mirror)["shape_len_z"]
+        np.testing.assert_allclose(z, zm, atol=1e-5)  # nothing depends on the attacking side
+
+    def test_constant_style_is_removed(self):
+        z = F.ball_free_shape_features(two_team_match())  # home always longer: no information
+        for name in ("shape_len_z", "shape_speed_z"):  # exactly constant in this fixture
+            values = z[name]
+            self.assertTrue(np.isnan(values).all() or np.nanmax(np.abs(values)) < 1e-3, name)
+
+    def test_row_percentiles_ignore_nan(self):
+        values = np.array([[1.0, 2.0, 3.0, 4.0, 5.0], [np.nan, np.nan, np.nan, np.nan, np.nan],
+                           [7.0, np.nan, 9.0, np.nan, np.nan]])
+        low, high = F._row_percentiles(values, (0, 100))
+        np.testing.assert_array_equal(low[[0, 2]], [1.0, 7.0])
+        np.testing.assert_array_equal(high[[0, 2]], [5.0, 9.0])
+        self.assertTrue(np.isnan(low[1]) and np.isnan(high[1]))
+
+
+class RestartTeamTests(unittest.TestCase):
+    def test_taker_owns_after_window_throw_in_has_no_team(self):
+        tags = [
+            {"code": "set pieces", "start_frame": 100, "end_frame": 199, "team": HOME, "type": "corner kick"},
+            {"code": "set pieces", "start_frame": 500, "end_frame": 599, "team": None, "type": "throw-in"},
+            {"code": "set pieces", "start_frame": 800, "end_frame": 899, "team": AWAY, "type": "goal kick"},
+        ]
+        t = F.tagging_features(tags, 1200)["restart_team"]
+        self.assertEqual(float(t[150]), 0.0)                       # before the final second
+        self.assertEqual(float(t[199]), 1.0)
+        self.assertEqual(float(t[199 + 4 * FPS]), 1.0)
+        self.assertEqual(float(t[199 + 4 * FPS + 1]), 0.0)
+        self.assertEqual(float(np.abs(t[500:700]).max()), 0.0)
+        self.assertEqual(float(t[900]), -1.0)
+
+
 if __name__ == "__main__":
     unittest.main()
