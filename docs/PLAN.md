@@ -1,6 +1,6 @@
 # MTAH 2027 — current execution plan
 
-Updated: 2026-10-20
+Updated: 2026-10-25
 
 Status vocabulary: `ready`, `in progress`, `blocked`, `done`.
 Only mark done when acceptance evidence is recorded. Evidence is aggregate only (DATA_POLICY.md).
@@ -12,7 +12,10 @@ Only mark done when acceptance evidence is recorded. Evidence is aggregate only 
 | B0 | blocked on H1 | Reproduce the baselines | `scripts/py starter/baseline.py` regenerates the four baselines; `scripts/py evaluation/run_evaluation.py` reproduces the README scoreboard on the public 5 minutes. |
 | B1 | ready | Understand the scorer and the public ground truth | From public files only: summarise the 17 public possessions (durations, `D` stretches, hand-overs) and how spellF1 reacts to fragmentation, smoothing and `X`. Notes in `docs/research/`. |
 | B2 | blocked on H1 | Data audit (aggregate only) | A script prints coverage statistics: ball visibility per half, track slot counts, any ownership/alive fields in the ATD, Smart Tagging class counts, homography validity. No rows printed. |
-| E1 | blocked on B0 | First method beyond nearest-player smoothing | Proposal with a hypothesis and the measured public-5-min spellF1/macroF1 with bootstrap intervals; reproducible command. |
+| E1 | done (external) | First method beyond nearest-player smoothing: v3 (`possession/`, `run.py`) | Hypothesis: two-stage Viterbi with learned dead-ball and control/shape evidence beats window voting. Evidence: leave-one-game-out on Metrica's public sample games, spellF1 0.544 vs 0.247 for smooth50, paired Δ +0.298 [+0.286, +0.312] (`docs/research/v3-external-validation.md`). Tests: `python -m unittest discover -s possession -p 'test_*.py'` → 5 OK. |
+| E2 | ready (local only) | Run v3 on the match | `python run.py --out evaluation/results/check50.csv --baseline 50` matches `baseline_smooth50.csv` (`scripts/compare_csv.py`); `python run.py --out evaluation/results/v3.csv` passes the validator; public-5-min scoreboard with `--bootstrap 1000` recorded as a sanity check only; full-match aggregates (possessions, D share) recorded. Two runs give the same SHA-256. |
+| U1 | ready | Sync upstream (23 Oct rule clarifications) | `git fetch upstream && git merge upstream/main`. Upstream now says the public 5 minutes are not for training or tuning and that external data must be about other games. AGENTS.md "Tune against them" must be aligned with that. |
+| X1 | ready | Second external set: Sportec Open DFL (7 matches, per-frame BallPossession/BallStatus, CC-BY) | Download locally (figshare), add a loader to `possession/external.py`, rerun `scripts/validate_external.py`. |
 
 ## H0a — local agent configuration
 
