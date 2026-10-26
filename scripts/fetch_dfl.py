@@ -1,10 +1,15 @@
 """Download the Sportec Open DFL / IDSSE matches (public, CC-BY 4.0; other games, not the challenge
 match) with kloppy and save each as a compact .npz (positions in cm, per-frame H/A/D labels from
-BallPossession and BallStatus). About 2.4 GB is downloaded; the outputs are a few MB per match.
+BallPossession and BallStatus). About 2.3 GB is downloaded; the outputs are a few MB per match.
 
-usage: pip install kloppy==3.18.0
+usage: pip install kloppy==3.19.1      (in a separate venv, with numpy==2.4.6 pandas==3.0.6)
        python scripts/fetch_dfl.py <out dir> [--matches J03WMX,J03WN1,...]
        python scripts/fetch_dfl.py <out dir> --meta meta.xml --raw positions.xml --name test
+
+kloppy >= 3.19 downloads from the Hugging Face mirror (huggingface.co/datasets/pysport/idsse-data);
+the figshare links used by kloppy 3.18 return an empty file to scripts. Manual alternative: download
+the *matchinformation* and *positions_raw* XML files from doi.org/10.6084/m9.figshare.28196177 and
+use --meta/--raw.
 
 Prints, per match, only frame counts and label shares (these are public data).
 """
@@ -43,7 +48,7 @@ def main() -> int:
         from kloppy import sportec
     except ImportError:
         print("kloppy is not installed in this Python: run it from a separate venv with "
-              "`pip install kloppy==3.18.0 numpy==2.4.6 pandas==3.0.6` (see the usage above)")
+              "`pip install kloppy==3.19.1 numpy==2.4.6 pandas==3.0.6` (see the usage above)")
         return 2
     os.makedirs(args.out, exist_ok=True)
     if args.meta and args.raw:
