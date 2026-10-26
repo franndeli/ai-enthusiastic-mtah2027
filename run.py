@@ -1,6 +1,7 @@
 """Regenerate the submission from the provided data with one command. Prints aggregates only.
 
     scripts/py run.py --out evaluation/results/route_a.csv
+    scripts/py run.py --out evaluation/results/route_a_st.csv --smart-tagging-weight 0.25
 
 Prerequisites (deterministic, see docs/PLAN.md Route A): scripts/fetch_external.py, then
 `scripts/py -m possession.io_dfl`, then `scripts/py -m possession.train --fit-all`.
@@ -13,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 import games
-from possession import atd
+from possession import atd, smart_tagging
 from possession.features import features
 from possession.frames import period_runs
 from possession.model import Model, decode
@@ -35,7 +36,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="submission CSV to write")
     parser.add_argument("--game", default=games.GAME)
+    parser.add_argument("--smart-tagging-weight", type=float, default=0.0, metavar="W",
+                        help="weight of the Smart Tagging log-evidence added before Viterbi "
+                             "(possession/smart_tagging.py); 0 disables it (default)")
     args = parser.parse_args()
+    if args.smart_tagging_weight < 0:
+        parser.error("--smart-tagging-weight must be >= 0")
 
     model_path = work_dir() / "model.npz"
     if not model_path.exists():
@@ -45,7 +51,14 @@ def main() -> None:
     except IOError as error:
         sys.exit(f"cannot load ATD: {error}")
 
-    codes = decode(Model.load(model_path), features(table).values, table.period)
+    extra = None
+    if args.smart_tagging_weight > 0:
+        try:
+            extra = args.smart_tagging_weight * smart_tagging.game_log_evidence(
+                args.game, table.n_frames, table.fps)
+        except IOError as error:
+            sys.exit(f"cannot load Smart Tagging: {error}")
+    codes = decode(Model.load(model_path), features(table).values, table.period, extra)
     codes = apply_rules(codes, table.period, [second_half_pre_kickoff(args.game)])
     letters = np.array(pm.LABELS)[codes]
     write_submission(args.out, letters)
