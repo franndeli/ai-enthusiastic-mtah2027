@@ -1,8 +1,9 @@
 # v5: training with the Sportec Open DFL matches
 
-Status: candidate (`config/possession_v5.json`, opt-in with `--model`); `run.py` still defaults to
-v4 until the local aggregates on the match are checked (PLAN E6). All numbers are aggregates on
-public data about other games, never on the match.
+Status: default of `run.py` since 2026-10-26 (`config/possession_v5.json`), after the local check
+on the match passed (below). v4 stays available with `--model config/possession_v4.json`. All
+numbers are aggregates on public data about other games, except the local check, which is
+aggregates on the match run on our own machine.
 
 ## Data
 
@@ -71,6 +72,15 @@ positive (~+0.01), not certain. v5 predicts fewer possessions than v4 (DFL 239 v
 260 vs 290) and calls slightly more D (+0.9 pp on DFL, +5 pp on SkillCorner).
 
 ## Check on the match before switching the default (local, aggregates only)
+
+Result (2026-10-26, Ángel's machine): valid; same SHA-256 on two runs; **221 possessions** (v4:
+223), mean 13.9 s, median 9.5 s; **D 51.5 %** (v4: 50.4 %), i.e. the DFL-like shift (+0.9 pp), not
+the SkillCorner-like one (+5 pp). Gap report close to v4 (D with the ball seen 24.4 % vs 23.0 %; in
+gaps of 1–10 s 71.2 % vs 68.5 %; in gaps ≥ 10 s 94.7 % vs 94.2 %). Public 5 minutes (sanity only):
+spellF1 0.5733 (v4 0.5733), macroF1 0.8492 (v4 0.8669), 13 possessions (truth 17). Passed: v5
+becomes the default.
+
+Criteria set beforehand:
 
 - Valid, same SHA-256 twice.
 - Expected from the benchmarks: ~200–210 possessions (v4: 223) and D ~51–55 % (v4: 50.4 %).

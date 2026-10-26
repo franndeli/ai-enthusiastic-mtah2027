@@ -1,8 +1,9 @@
 """Regenerate the submission from the match data: `python run.py --out evaluation/results/<name>.csv`.
 
 Reads the tactical ATD (and the Smart Tagging kick-offs) from MTAH_DATA_DIR, applies the logistic
-coefficients in config/possession_v4.json (default; fitted on Metrica's public sample games only;
-`--model config/possession_v3.json` gives v3), decodes H/A/D with switching costs, writes
+coefficients in config/possession_v5.json (default; fitted on public data about other games only:
+Metrica's sample games and the Sportec Open DFL matches; `--model config/possession_v4.json` or
+`possession_v3.json` gives the earlier versions), decodes H/A/D with switching costs, writes
 `frame,label` (X outside the graded halves), runs the official validator on that exact file and
 prints aggregates only. Deterministic: no randomness, no training.
 """
@@ -28,7 +29,7 @@ from .reference import OFFICIAL, baseline_labels
 from .tracking import read_epts
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL = os.path.join(HERE, "..", "config", "possession_v4.json")
+DEFAULT_MODEL = os.path.join(HERE, "..", "config", "possession_v5.json")
 PRIVATE_ROOT = os.path.join(os.path.expanduser("~"), ".mtah2027")
 
 
