@@ -82,6 +82,32 @@ def to_arrays(dataset) -> dict:
             "fps": np.array(float(dataset.metadata.frame_rate or 25.0))}
 
 
+def controlled(labels: np.ndarray, blocks, fps: float, min_s: float = 2.0) -> np.ndarray:
+    """DFL's BallPossession changes on every touch (370-511 possessions per match, a quarter to a
+    third of them under 2 s). CHALLENGE.md counts a change only when the new team gains controlled
+    possession ("a player keeps the ball for a few seconds"), so inside each alive stretch a run of
+    the other team shorter than `min_s` stays with the team that had the ball."""
+    out = labels.copy()
+    for a, b in blocks:
+        seg = out[a:b]
+        alive = np.isin(seg, (H, A))
+        cut = np.flatnonzero(np.diff(alive.astype(np.int8)) != 0) + 1
+        for s, e in zip(np.r_[0, cut], np.r_[cut, len(seg)]):
+            if not alive[s]:
+                continue
+            run = seg[s:e]
+            edges = np.flatnonzero(np.diff(run) != 0) + 1
+            prev = None
+            for rs, re_ in zip(np.r_[0, edges], np.r_[edges, len(run)]):
+                team = int(run[rs])
+                if prev is not None and team != prev and (re_ - rs) < min_s * fps:
+                    run[rs:re_] = prev
+                else:
+                    prev = team
+        out[a:b] = seg
+    return out
+
+
 def save(arrays: dict, path: str) -> None:
     np.savez_compressed(path, **arrays)
 

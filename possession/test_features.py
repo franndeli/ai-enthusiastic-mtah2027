@@ -98,5 +98,20 @@ class TestTags(unittest.TestCase):
         self.assertEqual(int(net[42]), -1)
 
 
+class TestDfl(unittest.TestCase):
+    def test_controlled_possession(self):
+        from possession import H, A, D
+        from possession.dfl import controlled
+        fps = 25.0
+        lab = np.array([H] * 100 + [A] * 25 + [H] * 100 + [A] * 75 + [D] * 50 + [A] * 10 + [H] * 90,
+                       dtype=np.int8)
+        out = controlled(lab, [(0, len(lab))], fps, min_s=2.0)
+        self.assertTrue((out[100:125] == H).all())      # 1 s touch by the other side: no change
+        self.assertTrue((out[225:300] == A).all())      # 3 s: a real change
+        self.assertTrue((out[300:350] == D).all())      # dead ball untouched
+        self.assertTrue((out[350:360] == A).all())      # restart side kept, the short run is first
+        self.assertTrue((out[360:450] == H).all())
+
+
 if __name__ == "__main__":
     unittest.main()
