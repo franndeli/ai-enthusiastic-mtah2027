@@ -67,6 +67,13 @@ class ViterbiTest(unittest.TestCase):
             self.assertEqual(codes[14], X)
             self.assertTrue(np.isin(codes[period > 0], (H, A, D)).all())
 
+    def test_extra_evidence_can_override_the_model(self):
+        values, labels = blobs(n=30)
+        model = fit(values, labels, [labels], emission_scale=1.0)
+        period = np.ones(30, np.int8)
+        push_away = np.tile([0.0, 1e3, 0.0], (30, 1))
+        self.assertTrue((decode(model, values, period, push_away) == A).all())
+
     def test_save_load_round_trip(self):
         values, labels = blobs()
         model = fit(values, labels, [labels], emission_scale=0.1)

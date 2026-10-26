@@ -145,9 +145,16 @@ def viterbi(log_emission: np.ndarray, log_trans: np.ndarray) -> np.ndarray:
     return path
 
 
-def decode(model: Model, values: np.ndarray, period: np.ndarray) -> np.ndarray:
-    """H/A/D codes per frame, each period decoded on its own; X outside play."""
+def decode(model: Model, values: np.ndarray, period: np.ndarray,
+           extra_log_evidence: np.ndarray | None = None) -> np.ndarray:
+    """H/A/D codes per frame, each period decoded on its own; X outside play.
+
+    extra_log_evidence (n, N_STATES) is added to the scaled emissions, for sources the model was
+    not trained on (e.g. Smart Tagging); it carries its own weight.
+    """
     emission = model.emission_scale * (predict_log_proba(model, values) - model.log_prior)
+    if extra_log_evidence is not None:
+        emission = emission + extra_log_evidence
     out = np.full(len(values), X, dtype=np.int8)
     for a, b in period_runs(period):
         out[a:b] = viterbi(emission[a:b], model.log_trans)

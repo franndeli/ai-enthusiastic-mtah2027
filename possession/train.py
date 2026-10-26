@@ -93,10 +93,10 @@ def baseline_codes(table: FrameTable, window: int = 50) -> np.ndarray:
     return pm.label_codes(smooth(nearest_team_codes(table), window))
 
 
-def prepare(table: FrameTable, rng: np.random.RandomState) -> dict:
+def prepare(table: FrameTable, rng: np.random.RandomState, feature_fn=features) -> dict:
     """Dropout-augmented table, its features, and the subsampled + mirrored training rows."""
     dropped = drop_ball(table, rng)
-    feats = features(dropped)
+    feats = feature_fn(dropped)
     step = max(1, int(round(TRAIN_STEP_S * table.fps)))
     rows = np.flatnonzero((table.period > 0) & (table.labels != X))[::step]
     values, labels = feats.values[rows], table.labels[rows]
@@ -125,30 +125,48 @@ def load_tables() -> list:
     return [(p.stem, FrameTable.load(p)) for p in paths]
 
 
-def lomo(tables: list) -> None:
+LOMO_METRICS = ("spell_f1", "macro_f1", "n_pred", "n_gt", "team_acc_seen", "team_acc_missing")
+
+
+def lomo(tables: list, feature_fn=features, train_fn=train, scales=EMISSION_SCALES) -> dict:
+    """Print the leave-one-match-out table; return {method: {metric: mean over matches}}.
+
+    feature_fn and train_fn let experiments swap one component while every other step (dropout,
+    seeds, scoring) stays identical, so results are paired with the committed pipeline.
+    team_acc_* is H/A accuracy on frames where truth and prediction are both alive, split by
+    whether the (dropped-out) ball is seen.
+    """
     rng = np.random.RandomState(SEED)
-    prepared = [prepare(t, rng) for _, t in tables]
-    header = ["match", "gt_spells", "base50"] + ["argmax"] + [f"vit{s}" for s in EMISSION_SCALES]
+    prepared = [prepare(t, rng, feature_fn) for _, t in tables]
+    methods = ["base50", "argmax"] + [f"vit{s}" for s in scales]
     print("spellF1 (macroF1) [predicted spells] per held-out match")
-    print("  ".join(f"{h:>22}" for h in header))
-    totals = np.zeros((len(header) - 2, 2))
+    print("  ".join(f"{h:>22}" for h in ["match", "gt_spells"] + methods))
+    sums = {m: np.zeros(len(LOMO_METRICS)) for m in methods}
     for i, (name, table) in enumerate(tables):
         start = time.time()
-        model = train(prepared[:i] + prepared[i + 1:], EMISSION_SCALES[0])
+        model = train_fn(prepared[:i] + prepared[i + 1:], scales[0])
         held = prepared[i]
+        seen = ~np.isnan(held["table"].ball_xy_m[:, 0])
         preds = [baseline_codes(held["table"]),
                  argmax_decode(model, held["values"], table.period)]
         preds += [decode(model.with_emission_scale(s), held["values"], table.period)
-                  for s in EMISSION_SCALES]
+                  for s in scales]
         cells, n_gt = [], 0
-        for j, pred in enumerate(preds):
+        for method, pred in zip(methods, preds):
             spell, macro, n_pred, n_gt = score(table.labels, pred)
-            totals[j] += (spell, macro)
+            alive = (table.labels < D) & (pred < D)
+            correct = pred == table.labels
+            team = [correct[alive & s].sum() / max((alive & s).sum(), 1) for s in (seen, ~seen)]
+            sums[method] += (spell, macro, n_pred, n_gt, *team)
             cells.append(f"{spell:.4f} ({macro:.3f}) [{n_pred}]")
         print("  ".join(f"{c:>22}" for c in [name, str(n_gt)] + cells),
               f"  {time.time() - start:.0f}s")
-    means = totals / len(tables)
-    print("  ".join(f"{c:>22}" for c in ["MEAN", ""] + [f"{s:.4f} ({m:.3f})" for s, m in means]))
+    means = {m: dict(zip(LOMO_METRICS, s / len(tables))) for m, s in sums.items()}
+    rows = [("MEAN", "{spell_f1:.4f} ({macro_f1:.3f})"), ("spells", "{n_pred:.0f} of {n_gt:.0f}"),
+            ("team seen/missing", "{team_acc_seen:.3f} / {team_acc_missing:.3f}")]
+    for label, fmt in rows:
+        print("  ".join(f"{c:>22}" for c in [label, ""] + [fmt.format(**means[m]) for m in methods]))
+    return means
 
 
 def main() -> None:

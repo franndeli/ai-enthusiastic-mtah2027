@@ -32,6 +32,22 @@ same pins (numpy, pandas, kloppy==3.18.0).
 | T4 | done | coordinator | `possession/model.py`, `possession/train.py`, tests | Softmax + Viterbi, LOMO on DFL with ball dropout; table in `docs/research/`. |
 | T9 | done (first candidate) | coordinator | `run.py`, `possession/postprocess.py` | One command -> validated submission (needs H1 to run). |
 
+### Route A improvement round (2026-10-26) — team call is the bottleneck
+
+Oracle decomposition (DFL LOMO, ATD-like gaps, scale 0.5): model 0.324; perfect D 0.379; perfect
+team on alive frames 0.842. Team accuracy (both alive): 0.838 ball seen, 0.612 ball missing.
+Reference for every unit: `possession.train.lomo` -> vit0.5 spellF1 0.3244 (macroF1 0.773),
+236 of 437 spells, team 0.838 / 0.612. Units run in parallel; coordinator owns integration,
+`features.py`, `train.py`, `decode`, re-tuning and git.
+
+| ID | Status | Owner | Owned paths | Task / acceptance |
+| --- | --- | --- | --- | --- |
+| I1 | in progress | agent-tactical | `possession/tactical.py`, `possession/test_tactical.py` | Ball-free formation features (attack direction per half, advancement, spread, line height, players in opponent half); paired LOMO vs reference. |
+| I2 | in progress | agent-trajectory | `possession/trajectory.py`, `possession/test_trajectory.py` | Ball-trajectory features for the seen-ball team call (in-flight passes, receiver); paired LOMO vs reference. |
+| I3 | in progress | agent-model | `possession/model.py` (not `decode`/`viterbi`), `possession/test_model.py` | Deterministic numpy non-linear classifier; paired LOMO vs softmax. |
+| I4 | in progress | agent-smarttag | `possession/smart_tagging.py`, `possession/test_smart_tagging.py`, `run.py` | Smart Tagging as extra log-evidence on the match; per-code aggregate agreement and weight on the public window only. |
+| I5 | ready | coordinator | `possession/features.py`, `possession/train.py` | Integrate accepted units, re-tune emission scale, regenerate and score. |
+
 ### Route A evidence (2026-10-26)
 
 - Tests: `scripts/py -m unittest discover -s possession -p 'test_*.py'` -> 43 OK.
