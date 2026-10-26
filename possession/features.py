@@ -10,6 +10,8 @@ Two feature sets:
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 from .tracking import HOME, AWAY, Tracking
@@ -129,6 +131,14 @@ def _carry_last(values: np.ndarray, seen: np.ndarray) -> np.ndarray:
 
 def compute(trk: Tracking) -> dict:
     """All per-frame features, as a dict of (N,) float64 arrays."""
+    # Frames where no player (or no player of a team) is tracked give all-NaN slices: their NaN
+    # results are intended and handled downstream, so numpy's "empty slice" warnings are noise.
+    with warnings.catch_warnings(), np.errstate(invalid="ignore", divide="ignore"):
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return _compute(trk)
+
+
+def _compute(trk: Tracking) -> dict:
     fps = trk.fps
     length, width = trk.pitch
     raw_seen = ~np.isnan(trk.ball[:, 0])
@@ -195,7 +205,62 @@ def compute(trk: Tracking) -> dict:
     f.update(g)
     f.update(_team_touch_features(trk, b, d, d_home, d_away, inside, fps))
     f.update(_shape_features(trk, fps))
+    f.update(_dead_v4_features(trk, vb, fps))
     return f
+
+
+def rolling_mean_side(x: np.ndarray, n: int, future: bool) -> np.ndarray:
+    """Mean over the n frames strictly before (future=False) or after (future=True) each frame."""
+    x = np.asarray(x, dtype=np.float64)
+    valid = ~np.isnan(x)
+    cv = np.concatenate(([0.0], np.cumsum(np.where(valid, x, 0.0))))
+    cc = np.concatenate(([0.0], np.cumsum(valid)))
+    i = np.arange(len(x))
+    if future:
+        lo, hi = np.minimum(len(x), i + 1), np.minimum(len(x), i + 1 + n)
+    else:
+        lo, hi = np.maximum(0, i - n), i
+    s, c = cv[hi] - cv[lo], cc[hi] - cc[lo]
+    out = np.full(len(x), np.nan)
+    np.divide(s, c, out=out, where=c > 0)
+    return out
+
+
+def _dead_v4_features(trk: Tracking, vb: np.ndarray, fps: float) -> dict:
+    """Dead-ball evidence from how the players move, built to survive a change of tracker.
+
+    Player speeds come from a 1 s displacement: position noise of ~15 cm per frame adds ~1 m/s to
+    a 0.24 s speed but only ~0.3 m/s to a 1 s speed. The `_rel` variants
+    divide by the median of the same quantity over the half, so a different tracker, league or
+    camera that shifts every speed by a constant factor does not shift the dead-ball call.
+    """
+    n = trk.n
+    half = int(round(0.5 * fps))
+    vp = player_speeds(trk.players, fps, half=half)
+    with np.errstate(invalid="ignore"):
+        med = _nanmedian_rows(vp)
+        valid = ~np.isnan(vp)
+        count = valid.sum(axis=1)
+        slow = np.where(count > 0, np.sum(valid & (vp < 1.5), axis=1) / np.maximum(count, 1), np.nan)
+        fast = np.where(count > 0, np.sum(valid & (vp > 4.0), axis=1) / np.maximum(count, 1), np.nan)
+    blocks = trk.blocks or [(0, n)]
+    scale = np.full(n, np.nan)
+    for a, b in blocks:
+        m = np.nanmedian(med[a:b]) if np.any(~np.isnan(med[a:b])) else np.nan
+        scale[a:b] = m
+    scale = np.where(np.isnan(scale) | (scale <= 0), np.nanmedian(med) if np.any(~np.isnan(med)) else 1.0,
+                     scale)
+    rel = med / scale
+    out = {}
+    for name, series in (("speed", med), ("rel", rel), ("slow", slow), ("fast", fast)):
+        for secs in (1, 4, 15):
+            out["d4_%s_%d" % (name, secs)] = rolling_mean(series, int(round(secs * fps)))
+        k = int(round(3 * fps))
+        out["d4_%s_past3" % name] = rolling_mean_side(series, k, future=False)
+        out["d4_%s_next3" % name] = rolling_mean_side(series, k, future=True)
+    out["d4_bfast_1"] = rolling_mean(np.where(np.isnan(vb), np.nan, (vb > 8.0).astype(float)),
+                                     int(round(fps)))
+    return out
 
 
 def _signed_team(trk: Tracking, nearest: np.ndarray, valid: np.ndarray) -> np.ndarray:
@@ -243,6 +308,21 @@ def _team_touch_features(trk, b, d, d_home, d_away, inside, fps) -> dict:
                 episode[s:e] = sign
     out["t_episode"] = episode
     out["t_episode_1"] = np.nan_to_num(rolling_mean(np.where(seen, episode, np.nan), 25))
+    # last team that controlled the ball, carried forward through passes and ball gaps with a
+    # decay (the possession stays with the last team in control until the other team controls it)
+    marks = np.flatnonzero(episode != 0)
+    carried = np.zeros(n)
+    if len(marks):
+        idx = np.where(episode != 0, np.arange(n), -1)
+        last = np.maximum.accumulate(idx)
+        ok = last >= 0
+        age = np.where(ok, np.arange(n) - last, 0)
+        for tau_s, key in ((2.0, "t_carry_2"), (6.0, "t_carry_6"), (20.0, "t_carry_20")):
+            carried = np.where(ok, episode[np.maximum(last, 0)] * np.exp(-age / (tau_s * fps)), 0.0)
+            out[key] = carried
+    else:
+        for key in ("t_carry_2", "t_carry_6", "t_carry_20"):
+            out[key] = carried
     # dribble: nearest player within 1.5 m moving with the ball
     drib = seen & (d_near < 1.5) & (rel < 2.5) & ~contested
     out["t_dribble_1"] = np.nan_to_num(rolling_mean(np.where(seen, _signed_team(trk, nearest, drib),
@@ -304,12 +384,28 @@ def _shape_features(trk: Tracking, fps: float) -> dict:
 TEAM_FEATURES_V1 = ("t_close", "t_adv", "t_control", "t_close_02", "t_control_02", "t_close_1",
                     "t_control_1", "t_close_3", "t_control_3")
 TEAM_TOUCH = ("t_episode", "t_episode_1", "t_dribble_1", "t_recv", "t_kick", "t_contested_close")
+TEAM_CARRY = ("t_carry_2", "t_carry_6", "t_carry_20")
 TEAM_SHAPE = ("s_block_2", "s_vel_2", "s_width_2", "s_length_2")
 TEAM_SHAPE6 = ("s_block_6", "s_vel_6", "s_width_6", "s_length_6")
 TEAM_FEATURES = TEAM_FEATURES_V1
+TEAM_FEATURES_V3 = TEAM_FEATURES_V1 + TEAM_TOUCH + TEAM_SHAPE + TEAM_SHAPE6
+
+# Dead-ball feature sets of the v4 experiments (docs/research/v4-robust-dead-ball.md).
+_D4 = ["d4_%s_%s" % (n, w) for n in ("speed", "slow", "fast") for w in ("1", "4", "15", "past3", "next3")]
+_D4_REL = ["d4_%s_%s" % (n, w) for n in ("rel", "slow", "fast") for w in ("1", "4", "15", "past3", "next3")]
+BALL_ROBUST = ("d_out_1", "d_bspeed_1", "d_still_2", "d_centre", "d4_bfast_1")
+BALL_VISIBILITY = ("d_seen_1", "d_seen_5", "d_gap_log", "d_gap_edge", "d_gap_out", "d_nearest")
+DEAD_V4_RAW = tuple(_D4) + BALL_ROBUST + BALL_VISIBILITY
+DEAD_V4_REL = tuple(_D4_REL) + BALL_ROBUST + BALL_VISIBILITY
+DEAD_V4_REL_NOVIS = tuple(_D4_REL) + BALL_ROBUST
 DEAD_FEATURES = ("d_speed_1", "d_speed_3", "d_speed_10", "d_slow_1", "d_seen_1", "d_seen_5",
                  "d_out_1", "d_bspeed_1", "d_still_2", "d_gap_log", "d_gap_edge", "d_gap_out",
                  "d_centre", "d_nearest")
+
+# v4 (config/possession_v4.json). v3 = DEAD_FEATURES + TEAM_FEATURES_V3. The pipeline itself reads
+# the names from the config it is given.
+DEAD_FEATURES_V4 = DEAD_V4_REL
+TEAM_FEATURES_V4 = TEAM_FEATURES_V3 + TEAM_CARRY
 
 
 def matrix(features: dict, names) -> np.ndarray:

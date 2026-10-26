@@ -44,7 +44,8 @@ def _events_csv(path: str) -> pd.DataFrame:
 
 
 def _events_json(path: str, home_id: str) -> pd.DataFrame:
-    data = json.load(open(path))["data"]
+    with open(path, encoding="utf-8") as handle:
+        data = json.load(handle)["data"]
     rows = []
     for ev in data:
         sub = ev.get("subtypes")
@@ -161,7 +162,24 @@ DEFAULT_NOISE = {
     "player_noise_m": 0.15,
     "p_player_drop": 0.07,      # share of player observations removed (~20.5 of 22 tracked)
     "player_drop_len_s": 3.0,   # mean length of a player dropout
+    # optional "player_noise_corr_s": 0 (default) = independent jitter per frame; > 0 = the error
+    # drifts slowly over that many seconds (left out here so v3's recorded config is unchanged)
 }
+
+
+def random_noise(seed: int) -> dict:
+    """A random degradation (domain randomisation): training on many plausible trackers keeps the
+    models from depending on one guess of how the challenge ATD is noisy."""
+    rng = np.random.RandomState(10000 + seed)
+    return {
+        "p_miss_dead": float(rng.uniform(0.45, 0.85)),
+        "p_miss_alive": float(rng.uniform(0.15, 0.40)),
+        "gap_median_s": float(rng.uniform(5.0, 15.0)),
+        "ball_noise_m": float(rng.uniform(0.1, 0.6)),
+        "player_noise_m": float(rng.uniform(0.0, 0.3)),
+        "player_noise_corr_s": float(rng.choice([0.0, 0.5, 2.0])),
+        "p_player_drop": float(rng.uniform(0.02, 0.12)),
+    }
 
 
 def _runs(mask: np.ndarray):
@@ -235,7 +253,14 @@ def degrade(trk: Tracking, gt: np.ndarray, noise: dict | None = None, seed: int 
         ball[t:t + rng.randint(1, 4)] += jump
 
     # -- players: noise, dropouts and identity swaps inside a team ------------------------------
-    players += rng.normal(0, cfg["player_noise_m"], players.shape)
+    noise = rng.normal(0, cfg["player_noise_m"], players.shape)
+    corr = int(round(cfg.get("player_noise_corr_s", 0.0) * fps))
+    if corr > 1:
+        # moving average along time, rescaled to keep the same standard deviation
+        c = np.cumsum(np.concatenate([np.zeros((1,) + noise.shape[1:]), noise]), axis=0)
+        smooth = (c[corr:] - c[:-corr]) / corr
+        noise = np.concatenate([smooth, np.repeat(smooth[-1:], corr - 1, axis=0)]) * np.sqrt(corr)
+    players += noise
     S = players.shape[1]
     for s in range(S):
         present = np.flatnonzero(~np.isnan(players[:, s, 0]))

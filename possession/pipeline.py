@@ -1,9 +1,10 @@
 """Regenerate the submission from the match data: `python run.py --out evaluation/results/<name>.csv`.
 
 Reads the tactical ATD (and the Smart Tagging kick-offs) from MTAH_DATA_DIR, applies the logistic
-coefficients in config/possession_v3.json (fitted on Metrica's public sample games only), decodes
-H/A/D with switching costs, writes `frame,label` (X outside the graded halves), runs the official
-validator on that exact file and prints aggregates only. Deterministic: no randomness, no training.
+coefficients in config/possession_v4.json (default; fitted on Metrica's public sample games only;
+`--model config/possession_v3.json` gives v3), decodes H/A/D with switching costs, writes
+`frame,label` (X outside the graded halves), runs the official validator on that exact file and
+prints aggregates only. Deterministic: no randomness, no training.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from .reference import OFFICIAL, baseline_labels
 from .tracking import read_epts
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL = os.path.join(HERE, "..", "config", "possession_v3.json")
+DEFAULT_MODEL = os.path.join(HERE, "..", "config", "possession_v4.json")
 PRIVATE_ROOT = os.path.join(os.path.expanduser("~"), ".mtah2027")
 
 
@@ -160,7 +161,7 @@ def main(argv=None) -> int:
     os.makedirs(work, exist_ok=True)
     manifest_path = os.path.join(work, os.path.splitext(os.path.basename(args.out))[0]
                                  + "_manifest.json")
-    with open(manifest_path, "w") as handle:
+    with open(manifest_path, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(manifest, handle, indent=1, sort_keys=True)
     print("manifest (aggregates only): %s" % manifest_path)
     return 0 if valid in (None, True) else 1

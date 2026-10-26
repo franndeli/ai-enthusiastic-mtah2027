@@ -45,19 +45,29 @@ class Model:
     # -- fitting -------------------------------------------------------------------------------
     @classmethod
     def fit(cls, feature_sets, label_sets, stride: int = 5, l2: float = 1.0,
-            team_names=TEAM_FEATURES, dead_names=DEAD_FEATURES) -> "Model":
-        """feature_sets: list of feature dicts; label_sets: matching label arrays (H/A/D/X)."""
+            team_names=TEAM_FEATURES, dead_names=DEAD_FEATURES,
+            l2_team: float | None = None, set_weights=None, team_only=None) -> "Model":
+        """feature_sets: list of feature dicts; label_sets: matching label arrays (H/A/D/X).
+        `l2` regularises the dead-ball model, `l2_team` (default: same) the team model.
+        `set_weights` weights every row of a set; `team_only` marks sets that train only the team
+        model (e.g. a dataset whose dead-ball convention differs)."""
         from . import H, A, D
-        Xd, yd, Xt, yt = [], [], [], []
-        for feats, lab in zip(feature_sets, label_sets):
+        n_sets = len(label_sets)
+        set_weights = list(set_weights) if set_weights is not None else [1.0] * n_sets
+        team_only = list(team_only) if team_only is not None else [False] * n_sets
+        Xd, yd, wd_set, Xt, yt, wt = [], [], [], [], [], []
+        for feats, lab, w, t_only in zip(feature_sets, label_sets, set_weights, team_only):
             rows = np.arange(0, len(lab), stride)
             rows = rows[np.isin(lab[rows], (H, A, D))]
-            Xd.append(matrix(feats, dead_names)[rows])
-            yd.append((lab[rows] == D).astype(np.float64))
+            if not t_only:
+                Xd.append(matrix(feats, dead_names)[rows])
+                yd.append((lab[rows] == D).astype(np.float64))
+                wd_set.append(np.full(len(rows), float(w)))
             alive = rows[np.isin(lab[rows], (H, A))]
             Xt.append(matrix(feats, team_names)[alive])
             yt.append((lab[alive] == H).astype(np.float64))
-        Xd, yd, Xt, yt = map(np.concatenate, (Xd, yd, Xt, yt))
+            wt.append(np.full(len(alive), float(w)))
+        Xd, yd, wd_set, Xt, yt, wt = map(np.concatenate, (Xd, yd, wd_set, Xt, yt, wt))
         d_mean = np.nanmean(Xd, axis=0)
         Xd = np.where(np.isnan(Xd), d_mean, Xd)
         d_std = Xd.std(axis=0) + 1e-9
@@ -65,9 +75,11 @@ class Model:
         t_scale = np.sqrt(np.mean(Xt ** 2, axis=0)) + 1e-9
         Xt = Xt / t_scale
         # balance classes for the dead model
-        wd = np.where(yd > 0, 0.5 / max(yd.mean(), 1e-9), 0.5 / max(1 - yd.mean(), 1e-9))
+        p_dead = np.sum(wd_set * yd) / np.sum(wd_set)
+        wd = wd_set * np.where(yd > 0, 0.5 / max(p_dead, 1e-9), 0.5 / max(1 - p_dead, 1e-9))
         bd = _fit_logistic(Xd, yd, wd / wd.mean(), l2=l2, intercept=True)
-        bt = _fit_logistic(Xt, yt, np.ones(len(yt)), l2=l2, intercept=False)
+        bt = _fit_logistic(Xt, yt, wt / wt.mean(), l2=l2 if l2_team is None else l2_team,
+                           intercept=False)
         params = {
             "dead": {"names": list(dead_names), "mean": d_mean.tolist(), "std": d_std.tolist(),
                      "beta": bd.tolist()},
@@ -91,12 +103,13 @@ class Model:
         return Xm @ np.asarray(q["beta"])
 
     def to_json(self, path: str) -> None:
-        with open(path, "w") as handle:
+        # fixed encoding and line endings: the same bytes on Windows and Linux
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
             json.dump(self.p, handle, indent=1, sort_keys=True)
 
     @classmethod
     def from_json(cls, path: str) -> "Model":
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             return cls(json.load(handle))
 
 

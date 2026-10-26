@@ -27,8 +27,9 @@ class TestReader(unittest.TestCase):
     def test_atd_format(self):
         with tempfile.TemporaryDirectory() as tmp:
             meta, raw = os.path.join(tmp, "m.xml"), os.path.join(tmp, "r.txt")
-            open(meta, "w").write(META)
-            open(raw, "w").write(RAW)
+            for path, text in ((meta, META), (raw, RAW)):
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write(text)
             trk = read_epts(meta, raw, pitch=(105.3, 68.0), n_frames=3)
         self.assertEqual(trk.players.shape, (3, 3, 2))
         self.assertEqual(trk.team.tolist(), [0, 1, 0])           # first <Team> is home

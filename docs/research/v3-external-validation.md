@@ -1,8 +1,10 @@
 # v3 possession pipeline and its external validation
 
-Status: implemented and validated on public external data. Not yet run on the match: the run on
-the match is local-only (E2 in PLAN.md). All numbers below are aggregates on Metrica's public
-sample games, never on the match.
+Status: implemented and validated on public external data; run locally on the match on 2026-10-25
+(PLAN E2), where it over-called stoppages. Superseded as the default by v4
+([v4-robust-dead-ball.md](v4-robust-dead-ball.md)); still reproducible with
+`--model config/possession_v3.json`. All numbers below are aggregates on Metrica's public sample
+games, never on the match.
 
 ## Method (`possession/`, entry point `run.py`)
 
