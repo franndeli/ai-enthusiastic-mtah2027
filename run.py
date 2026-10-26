@@ -63,7 +63,7 @@ def decode_blocks(log_evidence: np.ndarray, blocks: list[tuple[int, int]],
 
 def label_codes_from_config(config: dict, match: io.Match, tags: list | None = None) -> np.ndarray:
     """Codes for every frame. tags: Smart Tagging intervals (io.load_smart_tagging) or None."""
-    feats = features.compute(match, tags)
+    feats = features.compute(match, tags, config.get("features"))
     log_evidence = evidence.scores(feats, config.get("evidence"))
 
     def decode_block(block_evidence: np.ndarray, start: int) -> np.ndarray:

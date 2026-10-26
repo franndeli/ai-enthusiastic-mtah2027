@@ -3,7 +3,7 @@
   "_purpose": "Parameters of the possession pipeline (run.py). Version experiments by changing values here and recording results in docs/PLAN.md, not by copying files.",
   "evidence": {
     "w_control": 1.5,
-    "w_gap": 1.0,
+    "w_gap": 0.0,
     "gap_decay_s": 5.0,
     "gap_control_below": 0.3,
     "w_shape": 0.3,
@@ -11,6 +11,9 @@
     "shape_width": 1.687,
     "shape_speed": -0.535,
     "shape_vel": 0.484,
+    "w_touch": 1.0,
+    "touch_decay_s": 20.0,
+    "touch_unseen_decay_s": 5.0,
     "w_restart_team": 0.0,
     "team_confidence_max": 0.75,
     "dead_bias": -1.2,
@@ -23,11 +26,24 @@
     "gap_dead_ref_s": 10.0,
     "w_out": 1.0,
     "w_tag_dead": 0.5,
+    "w_moving": 1.5,
     "dead_confidence_max": 0.8,
     "dead_floor": 0.05
   },
   "decoder": {
     "min_duration_frames": 1,
-    "switch_cost": {"team_switch": 6.0, "to_dead": 6.0, "from_dead": 6.0}
-  }
+    "switch_cost": {
+      "team_switch": 16.0,
+      "to_dead": 8.0,
+      "from_dead": 8.0
+    }
+  },
+  "features": {
+    "_purpose": "feature rule overrides (possession/features.py constants are the defaults)",
+    "touch_radius_m": 1.5,
+    "touch_margin_m": 0.5,
+    "touch_min_frames": 5,
+    "ball_moving_m_s": 5.0
+  },
+  "_version": "v4 (W2, 2026-10-26): last-touch ownership + ball-motion alive clue; see docs/PLAN.md W2"
 }

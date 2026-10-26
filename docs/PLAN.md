@@ -1,6 +1,6 @@
 # MTAH 2027 — current execution plan
 
-Updated: 2026-10-20
+Updated: 2026-10-26
 
 Status vocabulary: `ready`, `in progress`, `blocked`, `done`.
 Only mark done when acceptance evidence is recorded. Evidence is aggregate only (DATA_POLICY.md).
@@ -13,9 +13,31 @@ Only mark done when acceptance evidence is recorded. Evidence is aggregate only 
 | B1 | ready | Understand the scorer and the public ground truth | From public files only: summarise the 17 public possessions (durations, `D` stretches, hand-overs) and how spellF1 reacts to fragmentation, smoothing and `X`. Notes in `docs/research/`. |
 | B2 | ready | Data audit (aggregate only) | A script prints coverage statistics: ball visibility per half, track slot counts, any ownership/alive fields in the ATD, Smart Tagging class counts, homography validity. No rows printed. |
 | E1 | done | First method beyond nearest-player smoothing | v3c, see W1 results: public spellF1 0.6000 [0.386, 0.782] (baseline 0.3256), IDSSE noisy 0.345, `scripts/py run.py`. |
-| E2 | ready | Short possessions | We predict 11 of 17 public possessions and 264 on the full match (public rate extrapolates to ~360): find evidence that reacts within ~0.5 s to a clean turnover without flicker; judge on IDSSE clean/noisy spellF1 and on public possession count. |
-| E3 | ready | Learned evidence with domain adaptation | Coarsen IDSSE labels (merge spells < ~2 s into the previous owner, D share) towards our granularity, retrain, re-judge (D006 revisit condition). |
+| E2 | done | Short possessions | W2: last-touch ownership (v4). Metrica sample clean/noisy 0.461/0.439 -> 0.563/0.528, IDSSE 0.414/0.344 -> 0.508/0.401, every match up; public 0.600 -> 0.525 [0.35, 0.70] (15 of 17 possessions; 0.600 with oracle dead frames), full match 314 possessions. `docs/research/last_touch_ownership.md`, D011. |
+| E5 | ready | Dead-ball stretches with a tracked, slow ball | On the public D stretches the ATD keeps the ball (seen 66% vs 10-22% on Metrica dead frames) and players near it; both v3c and v4 miss them (v4 then splits them into spurious spells). No external judge represents this regime. Candidate ideas measured and rejected in W2 section 5; needs a new observation (e.g. tag-start alignment, restart-kick detection) validated without fitting on the match. |
+| E3 | done (not adopted) | Learned evidence with domain adaptation | V2 tested fixed <2 s external ownership-label coarsening with team-only learning: reserved IDSSE noisy +0.04772, but target/stress regressions; rejected. See `docs/research/factorized_generalization.md`. |
 | E4 | ready | Technical document polish + team name + public repo push | `docs/TECHNICAL.md` exported as `<team>.pdf`; repo pushed; `git ls-files` audit per DATA_POLICY. |
+
+## W2 — last-touch ownership, provider-matched judge (main session), 2026-10-26
+
+Status: done, **v4 adopted** (D011). Single-agent wave; no data path or match content entered
+the context (guard active throughout, aggregates only). Full evidence and rejected ideas:
+`docs/research/last_touch_ownership.md`.
+
+- Read the public ground truth: six of 17 possessions are under 4 s (0.76 s and 1.32 s exist);
+  ownership is "last team to play the ball". v3c's sustained-control model cannot produce them.
+- New external judge with the competition's own provider: three Metrica sample matches
+  (`scripts/fetch_metrica.py`, `possession/metrica.py`, `scripts/metrica_eval.py`), labels
+  derived from synchronised events (tested synthetically), spell statistics close to the public
+  window's (median 5.3 s vs 7.6 s; < 4 s 40-44% vs 35%); ball missing 32-41% natively.
+- v4 = v3c + causal touch memory (`w_touch` 1, 20 s decay, 5 s extra decay while the ball is
+  unseen), gap memory off, ball-travel alive clue (`w_moving` 1.5 at 5 m/s), costs 16/8/8.
+- Results: Metrica clean/noisy 0.563/0.528 (v3c 0.461/0.439), IDSSE 0.508/0.401 (0.414/0.344),
+  all ten matches and both seeds up; public 0.525 [0.35, 0.70] (v3c 0.600 [0.39, 0.78]),
+  macro 0.811, 15/17 possessions, 0.600 with oracle D frames; transplant 10 seeds 0.49/0.40
+  (v3c 0.56/0.43); full match 314 possessions of 12.7 s; 108 tests OK; validator OK; cold and
+  warm generation identical (sha256 `1f69e8429b62f25d`).
+- Not resolved: dead-ball stretches where the ATD tracks a slow ball (task E5).
 
 ## S0 — pipeline skeleton (coordinator), 2026-10-22
 
@@ -131,6 +153,222 @@ Evidence: `git ls-files .pi .claude` empty; `git check-ignore` confirms both con
 `cmp` against HEAD confirms both local files unchanged. `git diff --check` passed;
 `python3 -m unittest discover -s scripts -p 'test_*.py'` → 12 tests OK.
 No hook code changed; runtime hook behavior was not re-tested. No commit or push performed.
+
+## V1 — OpenAI-only generalization review
+
+Status: done — no candidate accepted. Coordinator owns integration, acceptance and this plan.
+v3c production files remained unchanged; experiments live in ignored `.orchestration/v1/`.
+No new dependencies. Full evidence: `docs/research/generalization_review.md`.
+Acceptance: SPEC generalization gate; all attempts reported, no adoption from public-window tuning.
+Use whole-match external evaluation and seeded paired noise; disclose prior IDSSE reuse and leakage.
+Workers may edit only their listed scratch paths, never production code/config or each other's files.
+
+| Task | Agent/model requested | Owned paths | Completion criteria |
+| --- | --- | --- | --- |
+| V1-A done: validation audit | OpenAI Codex / gpt-6.1-sol high | `.orchestration/v1/audit/` | Audit leakage, scorer and fit/evaluation boundaries; recommend executable strict gate; independently challenge claimed generalization. Code/public docs only, aggregate outputs. |
+| V1-B done: no finalist | OpenAI Codex / gpt-6-astra high | `.orchestration/v1/rules/` | Predeclare <= 4 evidence/control hypotheses before scoring; external-only development; at most one frozen finalist, synthetic tests and aggregate comparisons. No production edits. |
+| V1-C done: no finalist | OpenAI Codex / gpt-6-sol high | `.orchestration/v1/decoder/` | Predeclare <= 4 decoder/temporal hypotheses before scoring; external-only development; at most one frozen finalist, synthetic tests and aggregate comparisons. No production edits. |
+
+Coordinator reserves the final public/stress evaluation and production changes. A hypothesis must
+not be adjusted after confirmation results. Workers use the first four sorted external matches
+for development only; remaining three are coordinator confirmation (historically reused, not unseen).
+All fitting for claimed held-out scores must exclude evaluation matches. Rule zero repeated in
+all dispatches. Each report includes commands, all candidates, failures and limitations.
+
+Evidence: Orca run `run_5871893e60b7`, three distinct requested/effective OpenAI models confirmed;
+all workers completed and were released. Seven predeclared alternatives tested; coordinator
+independently reran both evaluators. Best rule noisy-development gain +0.01635; best decoder
++0.00479; both below +0.03. No alternative advanced to confirmation or target scoring; no
+parameter revisions after results. Development scores use historically pooled shape coefficients
+and are exploratory, not held-out generalization evidence. Audit found shape-fit overlap and
+shared-temperature leakage in the unused learned experiment; TECHNICAL now qualifies past claims.
+Three reused confirmation matches cannot establish strong new-match evidence; no weaker
+statistical gate was substituted.
+
+Coordinator reproduced v3c public spellF1 0.6000 [0.3857, 0.7823] (90% interval), macroF1
+0.82715; 10-seed transplant mean/min 0.55919/0.42963, transition 5/10/20 s 0.40000/0.41538/0.47692.
+Official validator exit 0; two generations SHA-256 identical (`374f198f07ccecbc...`).
+Development-only shape-fit comparator was separately run on the three confirmation matches
+(clean and seeds 101/307/911); no candidate comparison or production change implied.
+Checks: 94 package + 12 guard + 6 audit + 4 decoder + 8 rule synthetic tests passed.
+Production diff empty. Only documentation updated; no commit/push. Further credible promotion
+needs leakage-free fitting/calibration and more untouched, comparable external-match evidence.
+
+## V2 — substantive learning and validation repair
+
+Status: done — broader experiments completed, no production promotion. Continued after the
+user's request to push beyond V1. Production v3c remained frozen; no dependencies or target-data fitting. Coordinator owns docs, common evaluation
+and acceptance. V1's numerical/regression gates remain in force; do not use the public window
+to tune a failed candidate. This is a broader experiment wave, not a claim of improvement.
+
+| Task | OpenAI model | Owned paths | Completion criteria |
+| --- | --- | --- | --- |
+| V2-A learned stoppages | gpt-6-astra high | `.orchestration/v2/stoppages/` | Fixed player-only dead/alive learner, avoiding IDSSE's frozen-ball shortcut; outer-match-exclusive training, synthetic tests, clean/noisy development scores; at most two predeclared recipes, no target scoring. |
+| V2-B domain-adapted ownership | gpt-6-sol high | `.orchestration/v2/ownership/` | Fixed external-label coarsening and learned team-only evidence while preserving rule dead evidence; all fit/calibration excludes evaluation matches, synthetic tests, clean/noisy development scores; at most two predeclared recipes, no target scoring. |
+| V2-C untouched validation data | gpt-6.1-sol high | `.orchestration/v2/validation/` | Public-source audit for independent possession-labelled tracking with license/access/semantics evidence; do not treat event-derived proxy labels as true frame possession; also review common evaluation interface without viewing candidate results. |
+| V2-D fixed factorized combination | coordinator | `.orchestration/v2/combined/` | Predeclare one composition of the two 50% blends before either blended recipe's results; same outer-fold fit boundaries and gate, no blend search or target tuning. |
+| V2-E new-provider weak corroboration | gpt-6.1-sol high, reused validator | `.orchestration/v2/skillcorner/` | Download only first three sorted pinned SkillCorner bundles (~266 MB), verify hashes, pure synthetic-tested 10→25 Hz adapter; score frozen ownership recipe without fitting on these matches; report provider-label caveats, all aggregate coverage and scores. No production changes. |
+
+First-four sorted external matches remain development; candidates screened with four-fold
+cross-fitting, including shape coefficients fitted only to each outer training set. Paired noisy
+seeds 11/29, fixed recipe selection on external development only. Any frozen finalist must be
+independently rerun on the remaining three matches with all fitted components trained only on
+the first four, then judged against the untouched-production target baseline once. Confirmation
+remains historically reused and inadequate for an unconditional new-match claim; acquisition of
+meaningfully independent evidence is a separate task, not a reason to manufacture significance.
+Scratch-only code/artifacts until acceptance; row-level material remains outside the repository.
+Rule zero repeated in every dispatch; workers must report failed experiments too.
+
+### V2 results
+
+Full evidence and exact commands: `docs/research/factorized_generalization.md`. Run
+`run_8d721e3b9383`, three distinct OpenAI models and four completed dispatches (validator reused
+for acquisition). Five recipes: pure/half-blended stoppages, pure/half-blended ownership, fixed
+both-half composition. All fitting excluded the evaluated match, including baseline shape
+weights; no calibration-label leakage. Shared evaluator independently audited and hardened.
+
+- **V2-A rejected:** player-only stoppages noisy spell +0.01025 despite dead F1 +0.04194;
+  clean-match regression. Half-blended stoppages regress.
+- **V2-B selected externally, rejected for deployment:** coarsened ownership dev clean/noisy
+  gains +0.06268/+0.07456, positive on all four outer folds. Frozen reserved-three confirmation
+  gains +0.03598/+0.04772, positive on each match. Both reproduced independently by coordinator.
+  Target public spell 0.60000→0.55484, macro 0.82715→0.80783; transplant 0.55919→0.51884;
+  tc5/10/20 all regress. No target-driven revision or runner-up target scoring.
+- **V2-D passes development screen but not selected:** fixed combination noisy +0.04916, lower
+  than ownership-only; half-blended ownership +0.05227. No further target tests.
+- **V2-C/E completed:** found and hash-verified three new SkillCorner matches (nine assets,
+  266,007,186 bytes), no new dependencies; synthetic-tested local 10→25 Hz adapter. Frozen
+  ownership weak-label spell 0.47945→0.49111 (+0.01166), one slight match regression;
+  coordinator rerun reproduced. Provider phase/alive labels are algorithmic proxies, not gold,
+  so this does not rescue failed promotion. Remaining corpus matches not acquired/evaluated.
+- **Checks:** 156 tests passed (94 package, 12 guards, 50 V2 synthetic). Official validator exit
+  0 for rejected artifact and frozen production. Cold/warm production generations match original
+  SHA-256 `374f198f07ccecbc...`; production diff empty. All dispatches settled; ownership and
+  validation/acquisition workers released, stoppage worker preserved by Orca as user-owned.
+  No commit or push. Reused IDSSE/small-sample uncertainty and source transfer remain limitations.
+
+## V3 — observation-model research, RunPod compute
+
+Status: done — no production promotion. User requests a meaningful improvement beyond public spellF1 0.600, forbids
+heavy local CPU/GPU work, and authorizes RunPod and agents. Preserve all pre-existing V1/V2 work
+and the v3c candidate. Coordinator owns integration, external experiment execution, target checks,
+resource lifecycle and this plan. No target fitting/manual annotations/new dependencies.
+
+| Task | Agent | Owned paths | Completion criteria |
+| --- | --- | --- | --- |
+| V3-A contact/trajectory evidence | supervised Claude worker (Codex startup blocked) | `.orchestration/v3/contact/` | Review prior failures; predeclare <=2 materially different physics/contact recipes; pure candidate code and synthetic tests only; no real-match jobs, target scoring, production edits or dependency additions. Report mechanism, risks and exact evaluator interface. |
+| V3-B transfer audit and temporal ownership | supervised Claude worker | `.orchestration/v3/temporal/` | Audit V2 transfer bottlenecks from code/aggregates; implement <=2 externally trainable, source-robust temporal ownership recipes using existing dependencies; declare before scores, synthetic checks only, whole-match fit exclusions, no target use. |
+| V3-C remote evaluation and acceptance | coordinator | shared V3 evaluator/remote scripts, docs; accepted production changes only | Bounded RunPod execution on public external data only; all recipes/results recorded, unchanged SPEC gate, official validator and reproducibility for any finalist; verify no billable compute remains. |
+| V3-D fixed source-balanced ownership | reused V3-B Claude worker | `.orchestration/v3/multisource/` | Before any V3 scores, declare exactly one equal-provider training variant of the frozen gated temporal design using only the existing three SkillCorner development matches plus supplied IDSSE train IDs. Weak ownership labels only, fixed recipe, no evaluation feedback, synthetic tests. |
+| V3-E evaluation/source review | reused V3-A Claude worker | `.orchestration/v3/audit/`; factual corrections only to contact memos | Review shared external evaluator and temporal candidate boundaries without results/target data; synthetic tests for leakage and immutability; correct overstated baseline-window claims. No candidate implementation or threshold changes. |
+| V3-F spatial gap ownership | coordinator | `.orchestration/v3/gap_spatial/`, `.orchestration/v3/composed/` | Gap-only classifier using team geometry around last/next/interpolated ball anchors plus shape/memory; masked external training, equal-provider weighting, never target labels. Two fixed recipes: standalone gap correction and its visibility-weighted composition with frozen contact_filter (composition declared after contact's external screen, before gap results or any target check). No blend search or revisions after scores; synthetic tests, same external screen. |
+
+The initial remote budget is capped at $3 and 3 wall-clock hours for one inexpensive instance;
+inspect price before launch and terminate on completion/failure. Expand only if justified and
+confirmed. Workers do not launch compute or access credentials. Existing three SkillCorner
+matches are development-only/reused, never a fresh holdout; reserve any newly acquired matches
+before inspection. Native target checks remain coordinator-only and follow external selection.
+Reserved before any V3 scores: six next-sorted, previously unacquired SkillCorner IDs
+1925299/1927964/1953632/1959846/1986691/1996435, pinned commit
+`4340d274572876239c154c90bc507a9b3250a656`. These are confirmation-only weak-label corroboration,
+not gold, and will only be acquired for a frozen externally selected finalist. The existing first
+three may support development/training, never pristine confirmation.
+
+Early verification: six new synthetic evaluator-boundary checks passed; 94 package + 12 guard
+tests passed. Cold/warm frozen production regenerated identically with original SHA-256 and
+validator exit 0 (8.6 s total local verification; one thread). RunPod first provisioning attempt
+was terminated (delete exit 0, owned inventory empty) after an SSH response-schema mismatch;
+retry fixes the schema, not a model recipe. Codex startup failed at an update prompt; its supervised
+retry uses Claude, and the failed owned terminal was released by Orca. An earlier launcher task
+`97611595-ee5f-4564-a234-e2b745c21dad` was rejected at 18:23 UTC with `consumer_fenced`
+(coordinator not bound to the run). Its delayed notification was reconciled after closeout; later
+supervised launches supplied the completed work. No job was restarted; owned-pod inventory was
+rechecked empty.
+
+### V3 development checkpoint (before confirmation/target)
+
+Seven recipes measured on RunPod, four-fold external fitting, paired seeds 11/29. Mean noisy
+spellF1 deltas: contact_filter **+0.04079**, deflection_flight +0.01253, residual_rule +0.02785,
+gated_learned -0.00389, source_balanced +0.00086, spatial_gap +0.01869,
+**contact_spatial +0.06396**. The fixed composition has clean gain +0.07287 and noisy macro gain
++0.01341, with clean/noisy gains on every development match. Select **contact_spatial only** for
+confirmation, before any target evaluation; no runner-up target test if it fails. Composition
+source SHA-256 `1fdf7f58188bdcdee229c768ce7a5cabf081ad979689f93d5447e8168fcbaf6d`.
+This is a measured external improvement, not yet a better submission or proof of target transfer.
+
+Independent source/mock audit found incomplete input-mutation checks and missing D-column
+verification in the experimental evaluator, not a model bug. Coordinator hardened both; 36 audit
+checks pass without expected failures. Contact's original gains reproduced exactly with the
+hardened evaluator; the composition was first evaluated with it. Team symmetry is covered by each
+candidate's synthetic tests, not asserted from performance. RunPod smoke checks loaded all seven
+public caches and used matching pinned package versions. Three development SkillCorner bundles
+were fetched/hash-verified on RunPod, never sent to an LLM; six reserved bundles remain untouched
+pending the frozen finalist's confirmation.
+
+### V3 final decision
+
+Frozen composition passed reserved IDSSE numerical confirmation: clean +0.03616, noisy +0.04314,
+all three matches positive, descriptive noisy paired interval [0.02403, 0.05608]; reused-match and
+small-sample caveats remain (sign-flip p=0.25). Six newly acquired SkillCorner matches gave mixed
+weak-label corroboration: mean +0.00751, three positive/three negative, interval [-0.01075, 0.02400].
+No provider or recipe selection followed those outcomes.
+
+Target final check **rejects**: public spellF1 0.60000→0.46061, macroF1 0.82715→0.78172;
+transplant mean 0.55919→0.45403; transition 5/10/20 s 0.29677/0.35862/0.34286 versus
+0.40000/0.41538/0.47692. Predicted public possessions 11→16, full-match 264→329; correct counts
+are not correct intervals. Candidate validator exit 0 and independent reload/regeneration was
+byte-identical (`4aa15b6a7104daa8...`), but it is not an accepted submission. No runner-up target
+score or parameter revision. Local inference was bounded to one numerical thread, native 12.0 s
+and stress 29.2 s; training and all external evaluations ran on RunPod. First-half stress inference
+has a synthetic bit-equivalence check and reproduces every baseline stress score exactly.
+
+## V4 — previously unused automatic phase ownership
+
+Status: done — both fixed recipes fail external development; no target check or promotion.
+Distinct information source, not a rescue/retuning of rejected V3 recipes.
+All V3 implementations and output settings are frozen. Pre-score V4 review retains v3c's team
+confidence cap (tags share tracking inputs) and corrects duplicate-vs-conflict normalization.
+Same coordinator, same bounded remote
+lease; competition assets remain local and opaque to agents. No dependency additions.
+
+| Task | Agent | Owned paths | Completion criteria |
+| --- | --- | --- | --- |
+| V4-A phase observation model | supervised Claude worker | `.orchestration/v4/phases/` | At most two predeclared soft ownership-prior recipes from publicly described automatic phase codes; pure logic, synthetic tests, no real-match runs or target scoring. No target labels/pseudo-label fitting. |
+| V4-B external event observation adapter | supervised Claude worker | `.orchestration/v4/events/` | Genuine IDSSE public event observations independently aligned to cached tracking; no evaluated ownership labels used to construct inputs. Source/schema-based alignment, synthetic tests, safe aggregate audit/fetch command for RunPod. Stop if correct timebase cannot be established. |
+| V4-C evaluation/integration | coordinator | V4 shared evaluator, docs, accepted production changes only | Freeze external event-to-phase semantics and degraded-observation recipe before scoring; same outer fitting/paired gate, one frozen target finalist. Explicitly disclose event-vs-automatic-phase domain gap. |
+
+V4 source-readiness checkpoint (before results): all seven real event feeds parsed on RunPod. Independent supplied
+CalculatedFrame/CalculatedTimestamp metadata verify clock conversion on 180 events (one <=1-frame
+residual, others numerical precision). Original EventTime annotations are nevertheless noisy;
+pass-speed profiles show 2–3 s displacement on five matches, consistent with the source paper's
+explicit warning. No offset is tuned or corrected. Evaluate the original observations as a noisy
+coarse auxiliary feed, not as precise touch timestamps. Code/test review: 19 phase + 23 adapter +
+12 coordinator synthetic checks pass; production 94 and guards 12 still pass. At that checkpoint candidate scoring
+had not yet begun. Final results follow; no V4 target outputs were created.
+
+### V4 final decision and session closeout
+
+External noisy spellF1: baseline 0.30732; phase_gap 0.32288 (+0.01556), phase_uncertain 0.32797
+(+0.02065). Clean gains 0.00000/+0.01888. All four noisy match deltas positive, but neither reaches
++0.03: **select none**, no reserved-three comparison, no target score or strength/taper/gate rescue.
+Evidence and timestamp limitations: `docs/research/automatic_phase_evidence.md`. The nine measured
+V3/V4 recipes have not produced an accepted improvement over public spellF1 0.6000.
+
+Verification: 265 tests passed (94 production, 12 guard, 105 V3, 54 V4). Production code/config and
+pins have no diff; pre-existing V1/V2 documentation changes preserved. Final single-thread
+`scripts/py .orchestration/v2/check_production.py` rechecked cold/warm regeneration: both match
+`374f198f07ccecbc5f7b6231235c40eb6bbda3c66c391687bff6de5dc22d7758`, official validator exit 0.
+Canonical package and guard unittest commands plus discovery in each V3/V4 scratch suite passed;
+`git diff --check` passed, nothing staged, scratch confirmed ignored. No commit or push. Failed
+artifacts remain isolated, never replacing the v3c submission.
+
+RunPod closed: pod f4ykdqal54ajdo deletion exit 0, then independent owned-pod inventory empty;
+initial failed provisioning pod snk3ilflbn403o was also verified deleted. Successful lease lasted
+2.56 h at API-reported $0.24/h, approximately **$0.61 compute**; this is a runtime/rate estimate,
+not a reconciled invoice (brief initial provisioning/storage charges not established). V4 workers
+and the owned V3 temporal/audit worker released; the user-owned/external contact terminal retained
+by Orca was left untouched. Managed lease task `143bb4f7-c26b-401e-aeae-a740f849e86f`, visible
+terminal `term_aa02b04f-c5a4-4ec6-a22c-e4c95ff4c685`; coordinator run `run_d89006b3db08`.
 
 ## H0 notes
 

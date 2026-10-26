@@ -5,12 +5,13 @@ One command regenerates the submission:
     scripts/py run.py --out evaluation/results/<name>.csv [--config config/possession.json]
 
 Stages, each a pure function over numpy arrays (`possession/`). Match I/O lives in `io.py`;
-external-data I/O in `external.py` and `learned.py` (model files); nothing else touches files.
+external-data I/O in `external.py` (IDSSE), `metrica.py` (Metrica sample data) and `learned.py`
+(model files); nothing else touches files.
 
 | Stage | Signature |
 |---|---|
 | load | `io.load_match(source="tactical") -> Match`: arrays per video frame, `players_xy (n,46,2)`, `players_speed (n,46)`, `ball_xy (n,2)`, `ball_speed (n,)`, NaN = missing; `team_of_slot (46,)` HOME=0/AWAY=1; `halves`; `pitch_m`. `io.load_smart_tagging() -> list` of tagged intervals. |
-| features | `features.compute(match, tags=None) -> dict[str, (n,) float32]`, NaN = not computable on that frame |
+| features | `features.compute(match, tags=None, params=None) -> dict[str, (n,) float32]`, NaN = not computable on that frame; `params` = `config["features"]` overrides of the touch / ball-motion rule constants |
 | evidence | `evidence.scores(features, params) -> (n,3) float32` log-evidence for H, A, D; never NaN. `learned.scores` has the same signature. |
 | decode | `decoder.decode(log_evidence, switch_cost, cost_scale=None, min_duration_frames=1) -> (n,) int8` codes H=0 A=1 D=2; sequential Viterbi (the one intentional per-frame loop) |
 | structure | `structure.decode_halves(log_evidence, decode_fn) -> (n,) int8`: X=3 outside graded blocks, D before kick-off, halves decoded separately; `decode_fn(block)` or `decode_fn(block, start)` |

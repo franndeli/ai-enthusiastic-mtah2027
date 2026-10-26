@@ -31,7 +31,7 @@ from run import decode_blocks  # noqa: E402
 
 def predict(match: Match, config: dict) -> np.ndarray:
     """Pipeline codes for one match: each half decoded on its own, X outside the halves."""
-    feats = features.compute(match)
+    feats = features.compute(match, None, config.get("features"))
     log_evidence = evidence.scores(feats, config.get("evidence"))
     return decode_blocks(log_evidence, [(first, last) for _, first, last in match.halves],
                          config, feats)

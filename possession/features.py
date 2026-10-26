@@ -143,6 +143,53 @@ def control_features(feats: dict) -> dict:
     return {"control_balance": balance.astype(np.float32)}
 
 
+TOUCH_RADIUS_M = 1.5             # a player this close to the ball is playing it
+TOUCH_MARGIN_M = 0.5             # ... if no opponent is about as close
+TOUCH_MIN_FRAMES = 5             # a ball flying past a player is nearer for fewer frames
+
+
+def touch_features(feats: dict, radius_m: float = TOUCH_RADIUS_M, margin_m: float = TOUCH_MARGIN_M,
+                   min_frames: int = TOUCH_MIN_FRAMES) -> dict:
+    """Who last played the ball: the ground truth keeps the owner through flights and loose balls
+    and switches at the opponent's first touch, so ownership is a causal "last team near the
+    ball" memory rather than a centred control window.
+
+    touch_vote: +1 / -1 while the nearest home / away player is within radius_m of a visible ball
+        and the other team is at least margin_m farther, sustained for min_frames; else 0.
+    owner_sign: last non-zero vote (0 before the first); owner_age: frames since it (inf before).
+    """
+    home = np.where(np.isnan(feats["nearest_home_m"]), np.inf, feats["nearest_home_m"])
+    away = np.where(np.isnan(feats["nearest_away_m"]), np.inf, feats["nearest_away_m"])
+    with np.errstate(invalid="ignore"):
+        vote = np.where((home < radius_m) & (away - home > margin_m), 1.0,
+                        np.where((away < radius_m) & (home - away > margin_m), -1.0, 0.0))
+    n = len(vote)
+    if min_frames > 1 and n:
+        starts = np.flatnonzero(np.concatenate(([True], vote[1:] != vote[:-1])))
+        lengths = np.diff(np.concatenate((starts, [n])))
+        short = np.repeat(lengths < min_frames, lengths)
+        vote = np.where(short, 0.0, vote)
+    idx = np.arange(n)
+    last = np.maximum.accumulate(np.where(vote != 0, idx, -1))
+    owner = np.where(last >= 0, vote[np.maximum(last, 0)], 0.0)
+    age = np.where(last >= 0, idx - last, np.inf)
+    return {"touch_vote": vote.astype(np.float32), "owner_sign": owner.astype(np.float32),
+            "owner_age": age.astype(np.float32)}
+
+
+BALL_MOVING_M_S = 5.0            # a ball seen travelling this fast is in play (above the jitter)
+
+
+def ball_motion_features(ball_speed: np.ndarray, window: int = BALL_WINDOW_FRAMES,
+                         moving_m_s: float = BALL_MOVING_M_S) -> dict:
+    """Share of a centred 1 s window in which the ball was seen travelling faster than
+    moving_m_s (unseen frames count as not moving). An alive clue that needs a real ball: the
+    players slow down only after the whistle and speed up only after the restart kick."""
+    with np.errstate(invalid="ignore"):
+        moving = (ball_speed > moving_m_s).astype(np.float64)
+    return {"ball_moving_frac": uniform_filter1d(moving, window, mode="constant").astype(np.float32)}
+
+
 def team_memory_features(control_balance: np.ndarray) -> dict:
     """Which team last / next showed clear control, and how many frames away that was.
 
@@ -306,15 +353,22 @@ def tagging_features(tags: list, n_frames: int) -> dict:
     return {"tag_set_piece": set_piece, "restart_prior": restart, "restart_team": restart_team}
 
 
-def compute(match: Match, tags: list | None = None) -> dict:
-    """All features for every frame of the recording; Smart Tagging priors only when `tags` given."""
+def compute(match: Match, tags: list | None = None, params: dict | None = None) -> dict:
+    """All features for every frame of the recording; Smart Tagging priors only when `tags` given.
+    params: optional overrides of the touch rule (touch_radius_m, touch_margin_m, touch_min_frames)."""
+    p = params or {}
     feats = ball_features(match)
     feats.update(gap_features(feats["ball_present"] > 0))
     feats.update(control_features(feats))
     feats.update(ball_exit_features(match.ball_xy))
+    feats.update(ball_motion_features(feats["ball_speed_m_s"],
+                                      moving_m_s=p.get("ball_moving_m_s", BALL_MOVING_M_S)))
     feats["ball_out_frac"] = _moving_mean(feats["ball_out"].astype(np.float64),
                                           BALL_WINDOW_FRAMES).astype(np.float32)
     feats.update(team_memory_features(feats["control_balance"]))
+    feats.update(touch_features(feats, p.get("touch_radius_m", TOUCH_RADIUS_M),
+                                p.get("touch_margin_m", TOUCH_MARGIN_M),
+                                int(p.get("touch_min_frames", TOUCH_MIN_FRAMES))))
     feats.update(team_shape_features(match))
     feats.update(ball_free_shape_features(match))
     if tags is not None:

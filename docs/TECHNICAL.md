@@ -1,6 +1,6 @@
 # Technical document — MTAH 2027 Phase 1, ball possession
 
-Status: 2026-10-22, candidate v3 (rule evidence + Viterbi). Every number below is produced by a
+Status: 2026-10-26, candidate v4 (rule evidence + Viterbi). Every number below is produced by a
 command in this repository; nothing is hand-labelled or hand-corrected, and nothing is fitted on
 the competition match (organisers' clarification of 2026-10-22, issues #2 and #8).
 
@@ -8,8 +8,8 @@ the competition match (organisers' clarification of 2026-10-22, issues #2 and #8
 
 Per frame, the tactical tracking is turned into **log-evidence** for three states — home in
 possession (`H`), away (`A`), dead ball (`D`) — and an offline **Viterbi decoder** picks the most
-probable state sequence of each half under a fixed cost for every state change (6 nats for all
-six transitions). Frames outside the graded halves are `X`; the graded frames before the
+probable state sequence of each half under a fixed cost for every state change (16 nats between
+the teams, 8 nats into and out of a stoppage). Frames outside the graded halves are `X`; the graded frames before the
 second-half kick-off (110,808–113,741) are `D`. Pipeline and signatures: `docs/PIPELINE.md`.
 
 The evidence is two independent log-odds, combined so that team confidence never decides
@@ -23,10 +23,14 @@ are not independent votes:
    flight and nobody controls it). A single touch or deflection barely moves it; a reception and
    carry does. Loose and flying balls give flat evidence, so the decoder keeps the previous owner
    (CHALLENGE.md: contested balls stay with the last team).
-2. *Memory across gaps* (`w_gap`): where control is unclear (including the 41% of graded frames
-   with no ball), the last and the next team seen in clear control, each decaying with a 5 s time
-   constant. The pipeline is offline, so looking ahead to the re-acquisition is legitimate; a
-   hand-over inside a gap is then placed where the two memories cross instead of at the gap edge.
+2. *Last team to play the ball* (`w_touch`, v4): the public ground truth switches owner at the
+   opponent's first touch and keeps him through flights, loose balls and clearances (it contains
+   0.8 s and 1.3 s possessions). A touch vote is the nearest team while a visible ball is within
+   1.5 m of one of its players, the other team at least 0.5 m farther, for at least 5 frames; the
+   last vote persists causally, fading with a 20 s constant plus a 5 s constant of the time the
+   ball has been unseen, so that in long gaps the ball-free shape takes over. The former
+   symmetric gap memory (`w_gap`, hand-over at the middle of a gap) is switched off: on every
+   external match the touch memory places hand-overs better.
 3. *Ball-free team shape* (`w_shape`): the possessing team is longer along its attacking axis
    and wider, the defending team runs more, and the whole block drifts towards the possessor's
    goal. Each team's attack direction is inferred per half from where it keeps its goalkeeper
@@ -43,6 +47,9 @@ are not independent votes:
    `ball_exited` — the last visible trajectory projected over a line and the ball not yet back.
 6. *Smart Tagging*: a small constant inside tagged set-piece windows (`w_tag_dead` 0.5). Tags are
    evidence, never labels; their windows are coarse (end ~12 s after the real restart).
+7. *Ball travelling* (`w_moving`, v4): the share of a 1 s window with the ball seen faster than
+   5 m/s lowers the dead log-odds; the ball stops before the players do and restarts before
+   they accelerate, which fixed late restarts and early onsets on the external matches.
 
 A missing ball is **missing evidence, not a dead ball**: it only flattens the team evidence; the
 dead log-odds come from the players and from a projected exit.
@@ -56,6 +63,7 @@ dead log-odds come from the players and from a projected exit.
 | Tactical homography, both videos | not used |
 | Broadcast ATD / homography | **dropped** after a measured experiment (W7a): formation-based clock alignment accepted 31 of 253 broadcast runs and recovered 0.5% of the tactical ball gaps; the two balls disagreed by 2.6 m median where both were visible |
 | IDSSE / Sportec Open DFL (Bassek et al. 2025, 7 Bundesliga matches, CC-BY 4.0; `scripts/fetch_idsse.py`) | external labelled data: fitting the four shape weights, and validating every design choice on ~3,000 labelled possessions, clean and with ATD-like noise |
+| Metrica Sports sample data (3 anonymised matches, github.com/metrica-sports/sample-data; `scripts/fetch_metrica.py`) | primary external judge since v4: same provider and formats as the competition data, 25 fps, 0–1 coordinates, ball missing 32–41% natively; possession labels derived from the synchronised events with last-touch semantics (`possession/metrica.py`), ~1,000 possessions |
 
 ## 3. Handling missing and noisy tracking
 
@@ -95,7 +103,15 @@ Three judges, none of them the private ground truth:
 |---|---|
 | Public 5 minutes (17 possessions), 1000-draw bootstrap | pipeline correctness; too small to select between variants (the organisers' own baselines flip order between public and full match) |
 | Stress tests on the public window | gap robustness |
-| IDSSE leave-every-match-out, clean and noisy (`scripts/idsse_eval.py`) | the selection judge: 437 true possessions per run; noise = ball dropout with our gap statistics, jitter, slot fragmentation |
+| IDSSE clean and noisy (`scripts/idsse_eval.py`) | retrospective development comparison, not held-out evaluation: production shape weights were fitted on all seven matches; noise = ball dropout with our gap statistics, jitter, slot fragmentation |
+
+Validation audit (V1): the historical IDSSE numbers below are not proof of generalization.
+`scripts/idsse_eval.py` does not refit the pooled shape weights per held-out match. The separate
+learned experiment excludes evaluation matches from classifier fitting, but its shared calibration
+temperature uses their labels (`fit_with_calibration`), so its reported LOMO scores also have
+selection leakage. That experimental model remains outside production. Strict comparisons must
+exclude confirmation labels from every fitted component, including calibration. Reused matches
+and the 17-possession public window cannot establish that v3c is the best possible model.
 
 IDSSE's labels are finer than ours (D share 41–52%, spells mean 5.5–9 s versus 14 s in our public
 window), so it is used for *relative* decisions, never to set our switching rate.
@@ -106,7 +122,15 @@ window), so it is used for *relative* decisions, never to set our switching rate
 | v1 rules (control + memory + tags) | 0.4914 [0.34, 0.64] | 0.748 | 0.84 / 0.49 | 0.42 / 0.29 | 0.36 / 0.26 / 0.17 | 0.377 / 0.259 | 297, 14.7 s, 31% |
 | v2 + ball-free shape (weights fitted on our match — withdrawn, non-compliant) | 0.5935 | 0.772 | 0.84 / 0.49 | 0.54 / 0.46 | 0.41 / 0.47 / 0.48 | 0.377 / 0.308 | 275, 15.8 s |
 | v3 + dead-ball look-ahead and ball exit | 0.6133 [0.41, 0.79] | 0.824 | 0.87 / 0.65 | 0.55 / 0.46 | 0.42 / 0.49 / 0.48 | 0.405 / 0.332 | 260, 14.8 s, 39% |
-| **v3c, shape weights refit on IDSSE (submitted)** | **0.6000 [0.39, 0.78]** | **0.827** | 0.87 / 0.64 | 0.54 / 0.43 | 0.40 / 0.42 / 0.48 | **0.414 / 0.345** | 264, 14.6 s, 39% |
+| v3c, shape weights refit on IDSSE | 0.6000 [0.39, 0.78] | 0.827 | 0.87 / 0.64 | 0.54 / 0.43 | 0.40 / 0.42 / 0.48 | 0.414 / 0.345 | 264, 14.6 s, 39% |
+| **v4, last-touch ownership + ball travel (submitted)** | **0.5250 [0.35, 0.70]** | **0.811** | 0.95 / 0.60 | 0.49 / 0.40 | 0.34 / 0.42 / 0.40 | **0.508 / 0.401** | 314, 12.7 s, 37% |
+
+v4 is also scored on the Metrica sample matches (clean / noisy spellF1): v3c 0.461 / 0.439,
+v4 **0.563 / 0.528**; every one of the ten external matches improves, clean and noisy. The
+public-window decrease is inside its own interval and is entirely dead-ball handling: with the
+true D frames supplied as a diagnostic both v3c and v4 score 0.600. The organisers' warning that
+the public window ranks even their own baselines wrongly, and the size of the external sample,
+decided the adoption (`docs/DECISIONS.md` D011, `docs/research/last_touch_ownership.md`).
 
 Decoder switch costs were swept (2–12 nats, duration-aware variant up to 2 frames): inert on
 IDSSE (±0.003) and within noise on the public window; 6/6/6 kept. Clues tried and rejected on
@@ -114,14 +138,26 @@ the judges: ball interpolation across gaps, centroid advance, a restart-team pri
 longer or asymmetric memory, gap-length-as-dead, ball-at-rest and formation-based dead clues
 (the last two cannot be validated on IDSSE, whose ball is frozen during dead time).
 
+A subsequent factorized-learning review (V2, `docs/research/factorized_generalization.md`)
+repaired the fitting boundaries in an isolated evaluator. Fixed 2 s ownership-label coarsening
+and a team-only learner improved reserved IDSSE noisy spellF1 0.38329→0.43101, but target
+spellF1 fell 0.60000→0.55484 and all target stress scores declined. It was **not adopted**.
+A frozen comparison on three newly acquired SkillCorner matches yielded only +0.01166 mean
+spellF1 against explicitly weak provider-derived phase labels, not independent corrected truth.
+These experiments strengthen the transfer warning; they do not change the production method.
+
 ## 6. Limitations
 
 - The ground truth comes from corrected tracking we never see; our dead-ball onset follows the
   players, theirs follows the referee/ball. Four public stoppages are all we could check against.
 - Hand-overs inside long gaps (34.7% of graded frames sit in gaps > 10 s) are placed by shape
   and memory only; the transition-centred stress tests show spellF1 ~0.4–0.5 there.
-- Short possessions (< 2 s) are under-detected (we predict 264 possessions; the public rate
-  extrapolates to ~360).
+- Possessions under 2 s are still mostly missed (external recall ~0.1 at IoU 0.5); 2–4 s ones
+  are found about half the time.
+- Stoppages in which the automatic tracking keeps seeing a slow ball with players around it
+  (the public window's long D stretches) are under-detected, and v4 then splits them into short
+  spurious spells; no external data reproduces that regime, so it could not be fixed without
+  tuning on the match.
 - Public-window numbers have ±0.2 intervals; IDSSE semantics differ from ours in granularity.
 - A learned evidence model trained on IDSSE (`possession/learned.py`) exists but is not in the
   submitted path; it is kept only if it beats the rules on all three judges.

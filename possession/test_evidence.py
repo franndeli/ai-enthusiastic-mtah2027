@@ -18,6 +18,7 @@ def flat_features(n):
         "next_team_sign": np.zeros(n, np.float32),
         "frames_since_team": np.full(n, np.inf, np.float32),
         "frames_until_team": np.full(n, np.inf, np.float32),
+        "frames_since_ball": np.zeros(n, np.float32),
         "all_mean_speed_smooth_m_s": np.full(n, 1.5, np.float32),
         "ball_out_frac": np.zeros(n, np.float32),
     }
@@ -58,7 +59,7 @@ class TeamEvidenceTests(unittest.TestCase):
         f["next_team_sign"][:] = -1.0    # away has it after
         f["frames_since_team"] = np.arange(n, dtype=np.float32)
         f["frames_until_team"] = np.arange(n - 1, -1, -1, dtype=np.float32)
-        pref = team_pref(E.scores(f))
+        pref = team_pref(E.scores(f, {"w_gap": 1.0}))
         self.assertGreater(pref[5], 0)
         self.assertLess(pref[95], 0)
         self.assertAlmostEqual(float(pref[50]), 0.0, places=5)
@@ -68,7 +69,25 @@ class TeamEvidenceTests(unittest.TestCase):
         f["control_balance"][:] = -0.9   # clear away control now
         f["last_team_sign"][:] = 1.0
         f["frames_since_team"][:] = 1.0
-        self.assertTrue((team_pref(E.scores(f)) < 0).all())
+        self.assertTrue((team_pref(E.scores(f, {"w_gap": 1.0})) < 0).all())
+
+    def test_last_touch_owner_persists_and_fades(self):
+        n = 3000
+        f = flat_features(n)
+        f["owner_sign"] = np.full(n, -1.0, np.float32)   # away played the ball last
+        f["owner_age"] = np.arange(n, dtype=np.float32)
+        pref = team_pref(E.scores(f))
+        self.assertLess(pref[0], 0)
+        self.assertLess(pref[500], 0)                    # 20 s later: still away, weaker
+        self.assertGreater(pref[500], pref[0])
+        self.assertAlmostEqual(float(pref[2999]), 0.0, places=2)  # 2 min: forgotten
+        self.assertTrue((team_pref(E.scores(f, {"w_touch": 0.0})) == 0).all())
+
+    def test_touch_before_first_sighting_is_flat(self):
+        f = flat_features(self.n)
+        f["owner_sign"] = np.zeros(self.n, np.float32)
+        f["owner_age"] = np.full(self.n, np.inf, np.float32)
+        np.testing.assert_allclose(team_pref(E.scores(f)), 0.0, atol=1e-6)
 
     def test_team_confidence_is_capped(self):
         f = flat_features(self.n)
@@ -170,6 +189,14 @@ class DeadEvidenceTests(unittest.TestCase):
         ev = E.scores(f)
         self.assertFalse(np.isnan(ev).any())
         self.assertEqual(ev.dtype, np.float32)
+
+    def test_travelling_ball_is_alive_evidence(self):
+        f = flat_features(self.n)
+        f["all_mean_speed_smooth_m_s"][:] = 0.8          # players walking: dead by itself
+        base = E.scores(f)[:, D]
+        f["ball_moving_frac"] = np.ones(self.n, np.float32)
+        self.assertTrue((E.scores(f)[:, D] < base).all())
+        np.testing.assert_allclose(E.scores(f, {"w_moving": 0.0})[:, D], base)
 
     def test_weight_zero_switches_clue_off(self):
         f = flat_features(self.n)

@@ -23,7 +23,8 @@ from possession import FPS
 DEFAULT_PARAMS = {
     # --- team evidence ---
     "w_control": 1.5,              # sustained proximity of a controllable ball (control_balance, -1..1)
-    "w_gap": 1.0,                  # last / next clear controller where control is unclear
+    "w_gap": 0.0,                  # last / next clear controller where control is unclear (off:
+                                   # the touch memory below places hand-overs better, see W2)
     "gap_decay_s": 5.0,            # their influence fades with distance in time (seconds)
     "gap_control_below": 0.3,      # "unclear" means |control_balance| below this
     "w_shape": 0.3,                # ball-free team shape evidence (overall scale; 0 = off)
@@ -34,6 +35,10 @@ DEFAULT_PARAMS = {
     "shape_width": 1.687,
     "shape_speed": -0.535,
     "shape_vel": 0.484,
+    "w_touch": 1.0,                # last team to play the ball (owner_sign); the ground truth
+    "touch_decay_s": 20.0,         # keeps the owner through flights and loose balls (slow fade)
+    "touch_unseen_decay_s": 5.0,   # extra fade with the time the ball has been unseen (0 = none),
+                                   # so the ball-free shape evidence takes over in long gaps
     "w_restart_team": 0.0,         # team taking a tagged set piece owns the ball right after it
     "team_confidence_max": 0.75,   # |team logit| <= logit(this)
     # --- dead-ball evidence ---
@@ -47,6 +52,7 @@ DEFAULT_PARAMS = {
     "gap_dead_ref_s": 10.0,        # gap length that gives the full effect
     "w_exit": 0.5,                 # ball left the pitch (seen or projected) and is not back yet
     "w_tag_dead": 0.5,             # inside a tagged set-piece window
+    "w_moving": 1.5,               # ball seen travelling (> 5 m/s): in play (negative dead evidence)
     "dead_confidence_max": 0.8,    # dead probability clipped to [dead_floor, this]
     "dead_floor": 0.05,
 }
@@ -73,6 +79,12 @@ def team_logit(features: dict, p: dict) -> np.ndarray:
     memory = (features["last_team_sign"] * np.exp(-features["frames_since_team"] / tau)
               + features["next_team_sign"] * np.exp(-features["frames_until_team"] / tau))
     z = z + np.where(np.abs(balance) < p["gap_control_below"], p["w_gap"] * memory, 0.0)
+
+    if p["w_touch"] and "owner_sign" in features:
+        memory = np.exp(-features["owner_age"] / (p["touch_decay_s"] * FPS))
+        if p["touch_unseen_decay_s"] > 0:
+            memory = memory * np.exp(-features["frames_since_ball"] / (p["touch_unseen_decay_s"] * FPS))
+        z = z + p["w_touch"] * features["owner_sign"] * memory
 
     if p["w_shape"] and "shape_len_z" in features:
         shape = sum(p["shape_" + k] * _zero_nan(features["shape_" + k + "_z"])
@@ -103,6 +115,8 @@ def dead_logit(features: dict, p: dict) -> np.ndarray:
         z = z + p["w_gap_dead"] * gap_share * np.clip(_zero_nan(slow), 0.0, 2.0) / 2.0
     if "tag_set_piece" in features:
         z = z + p["w_tag_dead"] * features["tag_set_piece"]
+    if p["w_moving"] and "ball_moving_frac" in features:
+        z = z - p["w_moving"] * features["ball_moving_frac"]
     return z
 
 

@@ -103,6 +103,60 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(float(np.abs(self.balance(None)).max()), 0.0)
 
 
+class TouchTests(unittest.TestCase):
+    """Ownership = last team to play the ball; votes need sustained, unambiguous proximity."""
+
+    def feats(self, home_m, away_m):
+        n = len(home_m)
+        return {"nearest_home_m": np.asarray(home_m, np.float32),
+                "nearest_away_m": np.asarray(away_m, np.float32),
+                "ball_present": (~np.isnan(np.asarray(home_m, np.float32))).astype(np.float32)}
+
+    def test_owner_switches_at_opponents_touch_and_persists_through_flight(self):
+        far = np.full(60, 20.0)
+        home = far.copy()
+        home[:10] = 0.5                  # home player plays it ...
+        away = far.copy()
+        away[40:50] = 0.5                # ... away player receives it 1.2 s later
+        out = F.touch_features(self.feats(home, away))
+        self.assertTrue((out["touch_vote"][:10] == 1).all())
+        self.assertTrue((out["touch_vote"][10:40] == 0).all())
+        self.assertTrue((out["owner_sign"][:40] == 1).all())     # flight: still home
+        self.assertTrue((out["owner_sign"][40:] == -1).all())
+        self.assertEqual(out["owner_age"][39], 30)
+        self.assertEqual(out["owner_age"][45], 0)
+
+    def test_contested_ball_and_flash_proximity_do_not_vote(self):
+        home = np.full(30, 0.8)
+        away = np.full(30, 1.0)          # both within reach, no margin
+        out = F.touch_features(self.feats(home, away))
+        self.assertTrue((out["touch_vote"] == 0).all())
+        home = np.full(30, 20.0)
+        home[10:12] = 0.5                # a ball flying past: 2 frames only
+        out = F.touch_features(self.feats(home, np.full(30, 20.0)), min_frames=3)
+        self.assertTrue((out["touch_vote"] == 0).all())
+        self.assertTrue((out["owner_sign"] == 0).all())
+        self.assertTrue(np.isinf(out["owner_age"]).all())
+
+    def test_missing_ball_keeps_the_owner(self):
+        home = np.full(20, np.nan)
+        home[:5] = 0.3
+        out = F.touch_features(self.feats(home, np.full(20, np.nan)))
+        self.assertTrue((out["owner_sign"] == 1).all())
+        self.assertEqual(out["owner_age"][19], 15)
+
+
+class BallMotionTests(unittest.TestCase):
+    def test_moving_share_counts_only_seen_fast_frames(self):
+        speed = np.full(100, np.nan, np.float32)
+        speed[40:60] = 8.0               # in flight for 0.8 s
+        speed[60:80] = 1.0               # then slow
+        out = F.ball_motion_features(speed)["ball_moving_frac"]
+        self.assertAlmostEqual(float(out[50]), 20 / 25, places=5)
+        self.assertEqual(float(out[0]), 0.0)
+        self.assertLess(float(out[75]), 0.2)
+
+
 class MemoryTests(unittest.TestCase):
     def test_last_and_next_clear_controller(self):
         bal = np.zeros(10, dtype=np.float32)
