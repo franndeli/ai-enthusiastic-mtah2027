@@ -1,6 +1,7 @@
 """Where the missing ball costs us, on the external benchmark (Metrica sample games, leave one game
 out), where the truth is known: per gap-length bucket, the label mix of truth / v3 / v4, frame
-accuracy and possession changes inside gaps. Other games only; prints aggregates only.
+accuracy and possession changes inside gaps; and which true possessions are missed, by length and
+cause. Other games only; prints aggregates only.
 
 usage: python scripts/gap_benchmark.py <sample-data/data> [--noise default,more_missing_in_play]
 """
@@ -30,6 +31,59 @@ def gap_runs(mask):
     return zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1))
 
 
+LENGTHS = (0.0, 2.0, 5.0, 10.0, 20.0, np.inf)
+LENGTH_NAMES = ("< 2 s", "2-5 s", "5-10 s", "10-20 s", ">= 20 s")
+CAUSES = ("merged", "wrong team", "dead", "fragmented")
+
+
+def possessions(lab, blocks):
+    """Maximal H or A runs inside the blocks: [(start, stop, team)]."""
+    out = []
+    for a, b in blocks:
+        seg = lab[a:b]
+        cut = np.flatnonzero(np.diff(seg) != 0) + 1
+        for s, e in zip(np.r_[0, cut], np.r_[cut, len(seg)]):
+            if seg[s] in (H, A):
+                out.append((a + int(s), a + int(e), int(seg[s])))
+    return out
+
+
+def missed_by_length(gt, pred, blocks, fps):
+    """Per true-possession length: count, matched (same team, IoU >= 0.5, one-to-one, greedy --
+    an approximation of the official spell matching) and, for the missed ones, why."""
+    g_runs, p_runs = possessions(gt, blocks), possessions(pred, blocks)
+    cand = []
+    for gi, (a, b, t) in enumerate(g_runs):
+        for pi, (c, d, u) in enumerate(p_runs):
+            if u == t and c < b and d > a:
+                iou = (min(b, d) - max(a, c)) / (max(b, d) - min(a, c))
+                if iou >= 0.5:
+                    cand.append((iou, gi, pi))
+    matched, used = set(), set()
+    for _, gi, pi in sorted(cand, reverse=True):
+        if gi not in matched and pi not in used:
+            matched.add(gi)
+            used.add(pi)
+    table = np.zeros((len(LENGTH_NAMES), 2 + len(CAUSES)))
+    for gi, (a, b, t) in enumerate(g_runs):
+        k = int(np.searchsorted(LENGTHS, (b - a) / fps, side="right")) - 1
+        table[k, 0] += 1
+        if gi in matched:
+            table[k, 1] += 1
+            continue
+        seg = pred[a:b]
+        if np.mean(seg == D) >= 0.5:
+            cause = "dead"
+        elif np.mean(seg == t) < 0.5:
+            cause = "wrong team"
+        else:
+            inside = [r for r in p_runs if r[2] == t and r[0] < b and r[1] > a]
+            best = max(inside, key=lambda r: min(r[1], b) - max(r[0], a))
+            cause = "merged" if best[1] - best[0] > b - a else "fragmented"
+        table[k, 2 + CAUSES.index(cause)] += 1
+    return table
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("root", help="folder with Sample_Game_1..3 (metrica-sports/sample-data/data)")
@@ -56,6 +110,8 @@ def main() -> int:
         hits = {(n, k): 0 for n in VARIANTS for k in range(4)}
         changes = {(n, k): [0, 0] for n in names for k in (1, 2, 3)}
         frames = np.zeros(4)
+        missed = {n: np.zeros((len(LENGTH_NAMES), 2 + len(CAUSES))) for n in VARIANTS}
+        copies = 0
         for test, (trk, gt) in games.items():
             for s in TEST_SEEDS:
                 deg = degrade(trk, gt, noise=NOISE[sc], seed=s)
@@ -67,6 +123,8 @@ def main() -> int:
                     m = models[(n, test)]
                     labs[n] = segment(m.dead_logit(f), m.team_logit(f), deg.blocks, deg.n,
                                       cost_dead=40.0, cost_team=8.0)
+                    missed[n] += missed_by_length(gt, labs[n], deg.blocks, deg.fps)
+                copies += 1
                 for k in range(4):
                     m = b == k
                     frames[k] += m.sum()
@@ -96,6 +154,15 @@ def main() -> int:
                                               for n in names)
             print("  %-12s %5.1f%%  %s  %s  %s" % (BUCKETS[k], 100 * frames[k] / frames.sum(),
                                                    "  ".join(cells), acc, ch))
+        for n in VARIANTS:
+            t = missed[n] / copies
+            print("  %s: true possessions per game %.0f, recall by length (IoU >= 0.5) and why the "
+                  "missed ones are missed, per game" % (n, t[:, 0].sum()))
+            print("    %-9s %6s %7s   %s" % ("length", "true", "recall", "  ".join(
+                "%-10s" % c for c in CAUSES)))
+            for k, name in enumerate(LENGTH_NAMES):
+                print("    %-9s %6.1f %6.1f%%   %s" % (name, t[k, 0], 100 * t[k, 1] / max(t[k, 0], 1e-9),
+                                                     "  ".join("%-10.1f" % v for v in t[k, 2:])))
     print("total %.0fs" % (time.time() - t0))
     return 0
 

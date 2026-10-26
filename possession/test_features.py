@@ -80,5 +80,23 @@ class TestGaps(unittest.TestCase):
         self.assertAlmostEqual(prof["gap >= 10 s"]["D"], 100 / 260)
 
 
+class TestTags(unittest.TestCase):
+    def test_possession_sign_and_evidence(self):
+        from possession.tags import evidence, possession_sign
+        ev = [{"code": "BUILD UP", "start": 10, "end": 19, "tags": {"Team": "Barcelona"}},
+              {"code": "DEFENDING IN MIDDLE THIRD", "start": 15, "end": 24,
+               "tags": {"Team": "Barcelona"}},
+              {"code": "SET PIECES", "start": 30, "end": 34,
+               "tags": {"Team": "N/A", "Type": "Throw-in"}},
+              {"code": "PROGRESSION", "start": 40, "end": 44, "tags": {"Team": "Atletic Club"}}]
+        self.assertEqual([possession_sign(e) for e in ev], [1, -1, 0, -1])
+        net, home, away = evidence(ev, 50)
+        self.assertEqual(int(home[12]), 1)
+        self.assertEqual(int(net[17]), 0)        # home builds up while home defends: conflict
+        self.assertEqual(int(net[22]), -1)
+        self.assertEqual(int(net[32]), 0)        # throw-in: no team
+        self.assertEqual(int(net[42]), -1)
+
+
 if __name__ == "__main__":
     unittest.main()

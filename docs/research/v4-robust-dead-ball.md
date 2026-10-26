@@ -146,6 +146,37 @@ Next candidates: more labelled games with per-frame possession (Sportec Open DFL
 team model with interactions (e.g. gradient boosting kept antisymmetric by training on team-swapped
 copies), and short-possession recall.
 
+## On the match (local run, 2026-10-26, aggregates only)
+
+- Valid; the same SHA-256 on two runs; v3 regenerated identical to its 25 Oct output.
+- 223 possessions, mean 14.1 s, median 8.9 s, 3 under 1 s; D 50.4 % of graded frames (v3: 61.2 %),
+  i.e. ≈ 52 min of play out of ≈ 106 graded minutes (v3 ≈ 41 min).
+- Missing ball (`gap_report.py`): 40.7 % of graded frames; of the missing, 85.2 % in 79 gaps of
+  10 s or more. Public 5 minutes: only 11.8 % missing. D share b50 / v3 / v4 with the ball seen
+  0 / 37.9 / 23.0 %, in 1–10 s gaps 43.5 / 79.5 / 68.5 %, in gaps ≥ 10 s 85.8 / 97.7 / 94.2 %.
+- Public 5 minutes, sanity only (the scorer's own noise band is ~0.41): spellF1 0.5733, macroF1
+  0.8669, 13 possessions (gt 17). v3 had labelled 820 home-possession frames D there, v4 91.
+
+## Tried after v4 (not kept)
+
+- **Cheaper team switches at touches.** A per-frame switching cost (touch / ball seen / ball
+  missing, chosen on the training games): Metrica −0.001 to +0.001 (CIs include 0), SkillCorner
+  +0.0006 [−0.0013, +0.0022]. Not kept; the per-frame cost support stays in `decode.py` (tested)
+  for tag-based change points (PLAN X2).
+- **Which possessions are missed** (`gap_benchmark.py`): on the Metrica labels 53 % of the true
+  possessions last under 5 s, and v4 recalls 7 % of those under 2 s and 34 % of those of 2–5 s
+  (64 %, 78.5 % and 84 % for 5–10 s, 10–20 s and longer). Most misses are the other team's brief
+  touches.
+- **Benchmark labels closer to "controlled possession".** Our event-derived labels give 361–402
+  possessions per game (mean 8.8–9.8 s); the public window has 17 of mean 14.2 s (DATA.md), and
+  CHALLENGE.md does not count touches without control. A variant where the other team's run of
+  events only changes possession if it contains a pass, shot or carry, or lasts ≥ 2 s, gives
+  283–386 per game. Scored against it, v4 still beats v3 (+0.010 [+0.003, +0.017]; smooth players
+  +0.100), and retraining v4 on it does not help (−0.004 [−0.008, −0.001]). So v4 stands, and the
+  missed short possessions matter less for the challenge than the Metrica labels suggest. Labels
+  derived from corrected tracking, like the challenge's, are the better yardstick: Sportec DFL
+  (PLAN X1, `scripts/fetch_dfl.py`). Scratch experiments, not committed.
+
 ## Reproduce
 
 ```sh
@@ -157,4 +188,7 @@ git clone https://github.com/SkillCorner/opendata ~/mtah-external/skillcorner   
 python scripts/validate_skillcorner.py ~/mtah-external/skillcorner/data/matches
 python scripts/gap_benchmark.py ~/mtah-external/sample-data/data
 python -m unittest discover -s possession -p 'test_*.py'
+# on the match, local only, aggregates only
+python scripts/gap_report.py evaluation/results/v4.csv evaluation/results/v3.csv
+python scripts/tag_report.py --submission evaluation/results/v4.csv
 ```

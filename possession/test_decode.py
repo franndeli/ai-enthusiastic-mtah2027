@@ -66,6 +66,27 @@ class TestViterbi(unittest.TestCase):
         self.assertTrue((lab[150:200] == D).all())
         self.assertTrue((lab[200:350] == A).all())
 
+    def test_per_frame_costs_match_exhaustive_search(self):
+        rng = np.random.RandomState(1)
+        for _ in range(300):
+            n = rng.randint(1, 10)
+            score = rng.normal(0, 3, n)
+            cost = rng.uniform(0, 6, n)
+            got = viterbi2(score, cost)
+            best = -np.inf
+            for states in itertools.product((0, 1), repeat=n):
+                v = sum(x / 2.0 if q else -x / 2.0 for x, q in zip(score, states))
+                v -= sum(cost[t] for t in range(1, n) if states[t] != states[t - 1])
+                best = max(best, v)
+            v = sum(x / 2.0 if q else -x / 2.0 for x, q in zip(score, got))
+            v -= sum(cost[t] for t in range(1, n) if got[t] != got[t - 1])
+            self.assertAlmostEqual(v, best, places=9)
+
+    def test_constant_cost_array_equals_scalar(self):
+        rng = np.random.RandomState(2)
+        score = rng.normal(0, 1, 2000)
+        np.testing.assert_array_equal(viterbi2(score, np.full(2000, 4.0)), viterbi2(score, 4.0))
+
 
 if __name__ == "__main__":
     unittest.main()

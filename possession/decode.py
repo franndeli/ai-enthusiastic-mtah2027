@@ -17,15 +17,19 @@ import numpy as np
 from . import H, A, D, X
 
 
-def viterbi2(score: np.ndarray, cost: float, cost_up: float | None = None) -> np.ndarray:
+def viterbi2(score: np.ndarray, cost, cost_up: float | None = None) -> np.ndarray:
     """Binary Viterbi. score[t] = log-odds of state 1 vs state 0 at frame t.
 
     Maximises sum of +score/2 (state 1) or -score/2 (state 0) minus `cost` per 0->1 switch and
-    `cost_up` (defaults to `cost`) per 1->0 switch. Returns an int8 array of states.
+    `cost_up` (defaults to `cost`) per 1->0 switch. Returns an int8 array of states. `cost` may
+    also be an array: cost[t] is the price of switching between frames t-1 and t, in both
+    directions (cost[0] is unused).
     """
     n = len(score)
     if n == 0:
         return np.zeros(0, dtype=np.int8)
+    if np.ndim(cost) > 0:
+        return _viterbi2_varying(np.asarray(score, dtype=np.float64), np.asarray(cost, dtype=np.float64))
     c01 = float(cost)
     c10 = float(cost if cost_up is None else cost_up)
     s = np.asarray(score, dtype=np.float64).tolist()
@@ -54,6 +58,35 @@ def viterbi2(score: np.ndarray, cost: float, cost_up: float | None = None) -> np
     return states
 
 
+def _viterbi2_varying(score: np.ndarray, cost: np.ndarray) -> np.ndarray:
+    """viterbi2 with a per-frame, symmetric switching cost (same clip recursion, cost[t] at t)."""
+    n = len(score)
+    s = score.tolist()
+    c = cost.tolist()
+    delta = [0.0] * n
+    d = s[0]
+    delta[0] = d
+    for t in range(1, n):
+        ct = c[t]
+        if d > ct:
+            d = ct
+        elif d < -ct:
+            d = -ct
+        d += s[t]
+        delta[t] = d
+    states = np.zeros(n, dtype=np.int8)
+    state = 1 if delta[-1] > 0 else 0
+    states[-1] = state
+    for t in range(n - 1, 0, -1):
+        prev, ct = delta[t - 1], c[t]
+        if state == 1:
+            state = 1 if prev >= -ct else 0
+        else:
+            state = 0 if prev <= ct else 1
+        states[t - 1] = state
+    return states
+
+
 def _runs(mask: np.ndarray):
     edges = np.diff(np.concatenate(([0], mask.astype(np.int8), [0])))
     return list(zip(np.flatnonzero(edges == 1).tolist(), np.flatnonzero(edges == -1).tolist()))
@@ -62,8 +95,10 @@ def _runs(mask: np.ndarray):
 def segment(dead_logit: np.ndarray, team_logit: np.ndarray, blocks, n: int,
             cost_dead: float = 20.0, cost_team: float = 20.0, min_dead_s: float = 0.0,
             fps: float = 25.0, step: int = 1) -> np.ndarray:
-    """Labels (int8, H/A/D, X outside blocks). `step` > 1 decodes on frame bins (faster)."""
+    """Labels (int8, H/A/D, X outside blocks). `step` > 1 decodes on frame bins (faster).
+    `cost_team` may be a per-frame array of length n (see viterbi2)."""
     labels = np.full(n, X, dtype=np.int8)
+    varying = np.ndim(cost_team) > 0
     for a, b in blocks:
         dl = dead_logit[a:b]
         tl = team_logit[a:b]
@@ -74,7 +109,10 @@ def segment(dead_logit: np.ndarray, team_logit: np.ndarray, blocks, n: int,
                     dead[s:e] = 0
         lab = np.full(b - a, D, dtype=np.int8)
         for s, e in _runs(dead == 0):
-            home = _decode_binned(tl[s:e], cost_team, step)
+            if varying:
+                home = viterbi2(tl[s:e], np.asarray(cost_team)[a + s:a + e])
+            else:
+                home = _decode_binned(tl[s:e], cost_team, step)
             lab[s:e] = np.where(home == 1, H, A)
         labels[a:b] = lab
     return labels
