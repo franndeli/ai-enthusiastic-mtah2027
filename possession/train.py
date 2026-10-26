@@ -16,9 +16,12 @@ from pathlib import Path
 
 import numpy as np
 
-from possession.features import features
+from possession.features import Features, features
 from possession.frames import AWAY, HOME, A, D, H, X, FrameTable, period_runs
+from possession.mlp import train_mlp
 from possession.model import Model, argmax_decode, decode, fit
+from possession.tactical import tactical_features
+from possession.trajectory import trajectory_features
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "evaluation"))
@@ -93,7 +96,14 @@ def baseline_codes(table: FrameTable, window: int = 50) -> np.ndarray:
     return pm.label_codes(smooth(nearest_team_codes(table), window))
 
 
-def prepare(table: FrameTable, rng: np.random.RandomState, feature_fn=features) -> dict:
+def all_features(table: FrameTable) -> Features:
+    """Ball, formation and ball-control features side by side: the model's input."""
+    parts = [features(table), tactical_features(table), trajectory_features(table)]
+    return Features(np.hstack([p.values for p in parts]), sum((p.names for p in parts), ()),
+                    np.concatenate([p.antisymmetric for p in parts]))
+
+
+def prepare(table: FrameTable, rng: np.random.RandomState, feature_fn=all_features) -> dict:
     """Dropout-augmented table, its features, and the subsampled + mirrored training rows."""
     dropped = drop_ball(table, rng)
     feats = feature_fn(dropped)
@@ -108,6 +118,7 @@ def prepare(table: FrameTable, rng: np.random.RandomState, feature_fn=features) 
 
 
 def train(prepared: list, emission_scale: float) -> Model:
+    """Softmax regression; kept as the linear ablation of train_mlp."""
     return fit(np.vstack([p["train_x"] for p in prepared]),
                np.concatenate([p["train_y"] for p in prepared]),
                [r for p in prepared for r in p["runs"]], emission_scale)
@@ -128,7 +139,8 @@ def load_tables() -> list:
 LOMO_METRICS = ("spell_f1", "macro_f1", "n_pred", "n_gt", "team_acc_seen", "team_acc_missing")
 
 
-def lomo(tables: list, feature_fn=features, train_fn=train, scales=EMISSION_SCALES) -> dict:
+def lomo(tables: list, feature_fn=all_features, train_fn=train_mlp,
+         scales=EMISSION_SCALES) -> dict:
     """Print the leave-one-match-out table; return {method: {metric: mean over matches}}.
 
     feature_fn and train_fn let experiments swap one component while every other step (dropout,
@@ -180,7 +192,7 @@ def main() -> None:
         lomo(tables)
         return
     rng = np.random.RandomState(SEED)
-    model = train([prepare(t, rng) for _, t in tables], args.emission_scale)
+    model = train_mlp([prepare(t, rng) for _, t in tables], args.emission_scale)
     path = work_dir() / "model.npz"
     model.save(path)
     print(f"model saved to the work dir as {path.name} (emission_scale {args.emission_scale})")

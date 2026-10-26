@@ -1,7 +1,7 @@
 """Regenerate the submission from the provided data with one command. Prints aggregates only.
 
     scripts/py run.py --out evaluation/results/route_a.csv
-    scripts/py run.py --out evaluation/results/route_a_st.csv --smart-tagging-weight 0.25
+    scripts/py run.py --out evaluation/results/no_tags.csv --smart-tagging-weight 0   # ablation
 
 Prerequisites (deterministic, see docs/PLAN.md Route A): scripts/fetch_external.py, then
 `scripts/py -m possession.io_dfl`, then `scripts/py -m possession.train --fit-all`.
@@ -15,11 +15,11 @@ import numpy as np
 
 import games
 from possession import atd, smart_tagging
-from possession.features import features
 from possession.frames import period_runs
-from possession.model import Model, decode
+from possession.mlp import MLPModel
+from possession.model import decode
 from possession.postprocess import apply_rules
-from possession.train import work_dir
+from possession.train import all_features, work_dir
 from starter.baseline import write_submission
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "evaluation"))
@@ -36,9 +36,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="submission CSV to write")
     parser.add_argument("--game", default=games.GAME)
-    parser.add_argument("--smart-tagging-weight", type=float, default=0.0, metavar="W",
+    parser.add_argument("--smart-tagging-weight", type=float, default=0.25, metavar="W",
                         help="weight of the Smart Tagging log-evidence added before Viterbi "
-                             "(possession/smart_tagging.py); 0 disables it (default)")
+                             "(possession/smart_tagging.py, D009); 0 disables it")
     args = parser.parse_args()
     if args.smart_tagging_weight < 0:
         parser.error("--smart-tagging-weight must be >= 0")
@@ -58,7 +58,7 @@ def main() -> None:
                 args.game, table.n_frames, table.fps)
         except IOError as error:
             sys.exit(f"cannot load Smart Tagging: {error}")
-    codes = decode(Model.load(model_path), features(table).values, table.period, extra)
+    codes = decode(MLPModel.load(model_path), all_features(table).values, table.period, extra)
     codes = apply_rules(codes, table.period, [second_half_pre_kickoff(args.game)])
     letters = np.array(pm.LABELS)[codes]
     write_submission(args.out, letters)
