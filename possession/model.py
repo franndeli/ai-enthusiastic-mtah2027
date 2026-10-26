@@ -40,6 +40,10 @@ class Model:
     def with_emission_scale(self, emission_scale: float) -> "Model":
         return replace(self, emission_scale=emission_scale)
 
+    def log_proba(self, values: np.ndarray) -> np.ndarray:
+        """(n, N_STATES) log posteriors; the interface decode() needs from any classifier."""
+        return predict_log_proba(self, values)
+
 
 def _design(values: np.ndarray, mean: np.ndarray, scale: np.ndarray) -> np.ndarray:
     standard = (values.astype(np.float64) - mean) / scale
@@ -152,7 +156,7 @@ def decode(model: Model, values: np.ndarray, period: np.ndarray,
     extra_log_evidence (n, N_STATES) is added to the scaled emissions, for sources the model was
     not trained on (e.g. Smart Tagging); it carries its own weight.
     """
-    emission = model.emission_scale * (predict_log_proba(model, values) - model.log_prior)
+    emission = model.emission_scale * (model.log_proba(values) - model.log_prior)
     if extra_log_evidence is not None:
         emission = emission + extra_log_evidence
     out = np.full(len(values), X, dtype=np.int8)
@@ -163,7 +167,7 @@ def decode(model: Model, values: np.ndarray, period: np.ndarray,
 
 def argmax_decode(model: Model, values: np.ndarray, period: np.ndarray) -> np.ndarray:
     """Per-frame argmax, no temporal structure: the ablation Viterbi has to beat."""
-    out = predict_log_proba(model, values).argmax(axis=1).astype(np.int8)
+    out = model.log_proba(values).argmax(axis=1).astype(np.int8)
     out[period == 0] = X
     return out
 

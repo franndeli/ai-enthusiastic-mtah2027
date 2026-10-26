@@ -44,7 +44,7 @@ Reference for every unit: `possession.train.lomo` -> vit0.5 spellF1 0.3244 (macr
 | --- | --- | --- | --- | --- |
 | I1 | in progress | agent-tactical | `possession/tactical.py`, `possession/test_tactical.py` | Ball-free formation features (attack direction per half, advancement, spread, line height, players in opponent half); paired LOMO vs reference. |
 | I2 | in progress | agent-trajectory | `possession/trajectory.py`, `possession/test_trajectory.py` | Ball-trajectory features for the seen-ball team call (in-flight passes, receiver); paired LOMO vs reference. |
-| I3 | in progress | agent-model | `possession/model.py` (not `decode`/`viterbi`), `possession/test_model.py` | Deterministic numpy non-linear classifier; paired LOMO vs softmax. |
+| I3 | in progress | agent-model | `possession/mlp.py`, `possession/test_mlp.py` | Deterministic numpy non-linear classifier; paired LOMO vs softmax. |
 | I4 | in progress | agent-smarttag | `possession/smart_tagging.py`, `possession/test_smart_tagging.py`, `run.py` | Smart Tagging as extra log-evidence on the match; per-code aggregate agreement and weight on the public window only. |
 | I5 | ready | coordinator | `possession/features.py`, `possession/train.py` | Integrate accepted units, re-tune emission scale, regenerate and score. |
 
