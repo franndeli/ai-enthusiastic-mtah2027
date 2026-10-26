@@ -8,10 +8,10 @@ Only mark done when acceptance evidence is recorded. Evidence is aggregate only 
 | ID | Status | Task | Acceptance criteria |
 | --- | --- | --- | --- |
 | H0 | done | Working environment and agent harness | Official repo cloned (`upstream`), data root `~/.mtah2027` outside the repo, data guard for pi and Claude Code with passing tests, project Conda env, AGENTS/CLAUDE/docs in place. Evidence: guard tests 12/12 OK; env import check (see H0 notes). |
-| H1 | blocked on user | Get the match data | User enrols, accepts terms, downloads, and unpacks into `~/.mtah2027/data` keeping the names in `data/README.md`. `scripts/data-status.sh` shows all tactical files `ok`. |
-| B0 | blocked on H1 | Reproduce the baselines | `scripts/py starter/baseline.py` regenerates the four baselines; `scripts/py evaluation/run_evaluation.py` reproduces the README scoreboard on the public 5 minutes. |
+| H1 | done | Get the match data | User enrols, accepts terms, downloads, and unpacks into `~/.mtah2027/data` keeping the names in `data/README.md`. `scripts/data-status.sh` shows all tactical files `ok`. |
+| B0 | done | Reproduce the baselines | `scripts/py starter/baseline.py` regenerates the four baselines; `scripts/py evaluation/run_evaluation.py` reproduces the README scoreboard on the public 5 minutes. |
 | B1 | ready | Understand the scorer and the public ground truth | From public files only: summarise the 17 public possessions (durations, `D` stretches, hand-overs) and how spellF1 reacts to fragmentation, smoothing and `X`. Notes in `docs/research/`. |
-| B2 | blocked on H1 | Data audit (aggregate only) | A script prints coverage statistics: ball visibility per half, track slot counts, any ownership/alive fields in the ATD, Smart Tagging class counts, homography validity. No rows printed. |
+| B2 | partial | Data audit (aggregate only) | A script prints coverage statistics: ball visibility per half, track slot counts, any ownership/alive fields in the ATD, Smart Tagging class counts, homography validity. No rows printed. |
 | E1 | blocked on B0 | First method beyond nearest-player smoothing | Proposal with a hypothesis and the measured public-5-min spellF1/macroF1 with bootstrap intervals; reproducible command. |
 
 ## Route A (ROUTE_A_PLAN.md) — branch `feat/route-a-possession`
@@ -27,10 +27,10 @@ same pins (numpy, pandas, kloppy==3.18.0).
 | --- | --- | --- | --- | --- |
 | T1 | done | agent-forensics | `docs/research/public_gt.md`, `possession/public_gt_report.py` | Public-GT forensics and scorer sensitivity on synthetic series (see ROUTE_A_PLAN.md T1). |
 | T2 | done | agent-dfl | `scripts/fetch_external.py`, `possession/io_dfl.py`, `possession/test_io_dfl.py` | MD5-checked figshare download to `~/.mtah2027/external/dfl`, DFL -> `FrameTable` npz in `~/.mtah2027/work/dfl`, aggregates only, synthetic XML test. |
-| T7 | done (synthetic only) | agent-atd | `possession/atd.py`, `possession/test_atd.py` | ATD meta+raw -> `FrameTable` on the tactical video timeline; synthetic-file tests; cannot run on real data until H1. |
+| T7 | done | agent-atd | `possession/atd.py`, `possession/test_atd.py` | ATD meta+raw -> `FrameTable` on the tactical video timeline; synthetic-file tests; cannot run on real data until H1. |
 | T3 | done | coordinator | `possession/features.py`, `possession/test_features.py` | Identity-free, second-based, period-aware features; CODING.md fixture list. |
 | T4 | done | coordinator | `possession/model.py`, `possession/train.py`, tests | Softmax + Viterbi, LOMO on DFL with ball dropout; table in `docs/research/`. |
-| T9 | blocked on H1 | coordinator | `run.py`, `possession/postprocess.py` | One command -> validated submission (needs H1 to run). |
+| T9 | done (first candidate) | coordinator | `run.py`, `possession/postprocess.py` | One command -> validated submission (needs H1 to run). |
 
 ### Route A evidence (2026-10-26)
 
@@ -44,7 +44,18 @@ same pins (numpy, pandas, kloppy==3.18.0).
   byte-for-byte identical across two runs. Not yet run on the real match (H1).
 - Regenerate: `scripts/fetch_external.py` -> `scripts/py -m possession.io_dfl` ->
   `scripts/py -m possession.train --fit-all` -> `scripts/py run.py --out evaluation/results/route_a.csv`.
-- Next (T9/T10, needs H1): score on the public window with `--bootstrap`, check full-match D share
+- H1 (2026-10-26): data moved out of the repo into `~/.mtah2027/data` (user-approved);
+  `scripts/data-status.sh` -> all tactical assets ok (broadcast mp4 absent, unused).
+- B0: `scripts/py starter/baseline.py` regenerates the four baselines byte-identical to the committed
+  CSVs (`git diff --stat` empty). B2 (partial): `scripts/py -m possession.atd` -> 199,319 frames,
+  46 slots, ball visible on 59.3% of play frames, 20.49 tracked players (both match DATA.md).
+- T9: `scripts/py run.py --out evaluation/results/route_a.csv` (14 s) -> valid; 375 possessions,
+  mean 9.4 s, home share 0.583, D 44% of graded frames. Public window
+  (`run_evaluation.py --bootstrap 1000`): route_a spellF1 0.4222 [0.267, 0.578], macroF1 0.7845
+  [0.573, 0.850], 19 spells vs 17, alive/dead F1 0.942, team acc (both alive) 0.880.
+  smooth50: 0.3256 [0.214, 0.447] / 0.6207. smooth125 0.4242 leads spellF1 on this window only
+  (known misranking). The spellF1 intervals overlap: the public window cannot rank these.
+- Next: score on the public window with `--bootstrap`, check full-match D share
   and possession count, ATD-specific augmentation (crowd-biased dropout, slot noise).
 
 ## H0a — local agent configuration
