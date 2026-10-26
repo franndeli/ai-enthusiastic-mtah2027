@@ -55,6 +55,10 @@ same pins (numpy, pandas, kloppy==3.18.0).
   [0.573, 0.850], 19 spells vs 17, alive/dead F1 0.942, team acc (both alive) 0.880.
   smooth50: 0.3256 [0.214, 0.447] / 0.6207. smooth125 0.4242 leads spellF1 on this window only
   (known misranking). The spellF1 intervals overlap: the public window cannot rank these.
+- Domain gap (2026-10-26, `docs/research/domain_gap.md`): ATD ball gaps are long (median 10.7 s)
+  and concentrated in dead ball; training dropout now mimics that. DFL LOMO under ATD-like gaps:
+  0.3244 (scale 0.5) vs 0.3116 old dropout vs 0.2303 baseline. Canonical submission regenerated:
+  387 possessions, public spellF1 0.400 [0.253, 0.547], macroF1 0.744; model and CSV MD5-stable.
 - Next: score on the public window with `--bootstrap`, check full-match D share
   and possession count, ATD-specific augmentation (crowd-biased dropout, slot noise).
 

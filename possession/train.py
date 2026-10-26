@@ -4,8 +4,8 @@
     scripts/py -m possession.train --fit-all                       # final model -> work dir
 
 Model selection happens here, on external matches scored with the official spellF1, never on the
-public 5 minutes (EVALUATION.md misranking trap). Every table gets the same seeded ball dropout,
-because the target ATD misses the ball on ~43% of frames and DFL almost never does.
+public 5 minutes (EVALUATION.md misranking trap). Every table gets the same seeded ATD-like ball
+gaps (see drop_ball), because the target ATD misses the ball on ~41% of play frames and DFL never does.
 """
 
 import argparse
@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from possession.features import features
-from possession.frames import AWAY, HOME, A, H, X, FrameTable, period_runs
+from possession.frames import AWAY, HOME, A, D, H, X, FrameTable, period_runs
 from possession.model import Model, argmax_decode, decode, fit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,8 +26,11 @@ import possession_metrics as pm  # noqa: E402
 from starter.baseline import smooth  # noqa: E402
 
 SEED = 2027
-DROPOUT_RATE = 0.43        # ATD ball missing share, all frames (DATA.md)
-DROPOUT_MEAN_BLOCK_S = 1.5  # occlusions come in blocks, not single frames
+# ATD-like ball gaps, calibrated by possession.domain_gap (docs/research/domain_gap.md).
+DROPOUT_RATE = 0.407       # ATD ball missing share on play frames
+GAP_MEDIAN_S = 10.7        # ATD gaps are long and heavy-tailed: lognormal fits median/mean/p90
+GAP_SIGMA = 0.97
+DEAD_RATIO = 5.0           # public window: P(missing | D) / P(missing | alive) = 0.336 / 0.065
 TRAIN_STEP_S = 0.2         # subsample training rows; neighbours are near-duplicates
 EMISSION_SCALES = (0.2, 0.5, 1.0, 2.0, 4.0)
 assert (HOME, AWAY) == (H, A)  # nearest_team_codes and smooth() treat a team code as its label
@@ -37,19 +40,30 @@ def work_dir() -> Path:
     return Path(os.environ.get("MTAH_WORK_DIR", Path.home() / ".mtah2027" / "work"))
 
 
-def drop_ball(table: FrameTable, rate: float, mean_block_s: float,
-              rng: np.random.RandomState) -> FrameTable:
-    """Copy with the ball hidden in geometric-length blocks covering ~rate of the frames."""
+def drop_ball(table: FrameTable, rng: np.random.RandomState, rate: float = DROPOUT_RATE,
+              gap_median_s: float = GAP_MEDIAN_S, gap_sigma: float = GAP_SIGMA,
+              dead_ratio: float = DEAD_RATIO) -> FrameTable:
+    """Copy with the ball hidden in ATD-like gaps covering ~rate of the frames.
+
+    Gap lengths are lognormal; gaps start dead_ratio times more often while the ball is dead,
+    because on the ATD a missing ball is itself evidence of a stoppage.
+    """
     n = table.n_frames
-    hidden_mean = max(1.0, mean_block_s * table.fps)
-    shown_mean = hidden_mean * (1 - rate) / rate
+    mean_len = gap_median_s * np.exp(gap_sigma ** 2 / 2) * table.fps
+    dead = table.labels == D
+    d_share = dead[table.period > 0].mean()
+    p_dead = min(0.95, rate / (d_share + (1 - d_share) / dead_ratio))
+    p_alive = p_dead / dead_ratio
+    # Renewal approximation: missing share p needs a start hazard of p / ((1 - p) * mean length).
+    hazard = np.where(dead, p_dead / ((1 - p_dead) * mean_len), p_alive / ((1 - p_alive) * mean_len))
+    starts = rng.rand(n) < hazard
+    lengths = np.maximum(1, np.round(rng.lognormal(np.log(gap_median_s * table.fps), gap_sigma, n)))
     mask = np.zeros(n, dtype=bool)
-    pos, hidden = 0, bool(rng.rand() < rate)
-    while pos < n:
-        length = rng.geometric(1.0 / (hidden_mean if hidden else shown_mean))
-        mask[pos:pos + length] = hidden
-        pos += length
-        hidden = not hidden
+    pos = 0
+    for start in np.flatnonzero(starts):
+        if start >= pos:
+            pos = start + int(lengths[start])
+            mask[start:pos] = True
     ball = table.ball_xy_m.copy()
     ball[mask] = np.nan
     return FrameTable(table.fps, table.pitch_m, table.period, ball, table.players_xy_m,
@@ -81,7 +95,7 @@ def baseline_codes(table: FrameTable, window: int = 50) -> np.ndarray:
 
 def prepare(table: FrameTable, rng: np.random.RandomState) -> dict:
     """Dropout-augmented table, its features, and the subsampled + mirrored training rows."""
-    dropped = drop_ball(table, DROPOUT_RATE, DROPOUT_MEAN_BLOCK_S, rng)
+    dropped = drop_ball(table, rng)
     feats = features(dropped)
     step = max(1, int(round(TRAIN_STEP_S * table.fps)))
     rows = np.flatnonzero((table.period > 0) & (table.labels != X))[::step]
@@ -140,7 +154,7 @@ def lomo(tables: list) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--fit-all", action="store_true", help="fit on every match and save")
-    parser.add_argument("--emission-scale", type=float, default=0.5)  # LOMO peak, docs/research
+    parser.add_argument("--emission-scale", type=float, default=0.5)  # docs/research/domain_gap.md
     args = parser.parse_args()
     tables = load_tables()
     print(f"{len(tables)} DFL matches, {sum(t.n_frames for _, t in tables)} frames")

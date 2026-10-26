@@ -1,4 +1,6 @@
+import functools
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -26,12 +28,14 @@ def match(n=3000, seed=0):
 
 class TrainHelpersTest(unittest.TestCase):
     def test_drop_ball_rate_blocks_and_determinism(self):
-        table = match(n=20000)
-        a = drop_ball(table, 0.43, 1.5, np.random.RandomState(1))
-        b = drop_ball(table, 0.43, 1.5, np.random.RandomState(1))
+        table = match(n=200000)
+        a = drop_ball(table, np.random.RandomState(1), gap_median_s=1.0, gap_sigma=0.5)
+        b = drop_ball(table, np.random.RandomState(1), gap_median_s=1.0, gap_sigma=0.5)
         hidden = np.isnan(a.ball_xy_m[:, 0])
-        self.assertAlmostEqual(hidden.mean(), 0.43, delta=0.08)
+        self.assertAlmostEqual(hidden.mean(), 0.407, delta=0.06)
         self.assertLess(np.abs(np.diff(hidden.astype(int))).sum(), 0.1 * len(hidden))  # blocky
+        dead = table.labels == D
+        self.assertGreater(hidden[dead].mean(), 2 * hidden[~dead & (table.labels != X)].mean())
         np.testing.assert_array_equal(hidden, np.isnan(b.ball_xy_m[:, 0]))
         self.assertFalse(np.isnan(table.ball_xy_m).any())  # original untouched
 
@@ -55,7 +59,10 @@ class TrainHelpersTest(unittest.TestCase):
 
     def test_pipeline_recovers_synthetic_possessions(self):
         rng = np.random.RandomState(0)
-        prepared = [prepare(match(seed=s), rng) for s in range(3)]
+        # 8 s synthetic possessions cannot survive ATD-length gaps; this tests the wiring.
+        short_gaps = functools.partial(drop_ball, gap_median_s=1.0, gap_sigma=0.5)
+        with mock.patch("possession.train.drop_ball", short_gaps):
+            prepared = [prepare(match(seed=s), rng) for s in range(3)]
         model = train(prepared[:2], emission_scale=0.2)
         held = prepared[2]
         pred = decode(model, held["values"], held["table"].period)
