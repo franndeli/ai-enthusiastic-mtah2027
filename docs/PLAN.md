@@ -25,12 +25,27 @@ same pins (numpy, pandas, kloppy==3.18.0).
 
 | ID | Status | Owner | Owned paths | Task / acceptance |
 | --- | --- | --- | --- | --- |
-| T1 | in progress | agent-forensics | `docs/research/public_gt.md`, `possession/public_gt_report.py` | Public-GT forensics and scorer sensitivity on synthetic series (see ROUTE_A_PLAN.md T1). |
-| T2 | in progress | agent-dfl | `scripts/fetch_external.py`, `possession/io_dfl.py`, `possession/test_io_dfl.py` | MD5-checked figshare download to `~/.mtah2027/external/dfl`, DFL -> `FrameTable` npz in `~/.mtah2027/work/dfl`, aggregates only, synthetic XML test. |
-| T7 | in progress | agent-atd | `possession/atd.py`, `possession/test_atd.py` | ATD meta+raw -> `FrameTable` on the tactical video timeline; synthetic-file tests; cannot run on real data until H1. |
-| T3 | in progress | coordinator | `possession/features.py`, `possession/test_features.py` | Identity-free, second-based, period-aware features; CODING.md fixture list. |
-| T4 | in progress | coordinator | `possession/model.py`, `possession/train.py`, tests | Softmax + Viterbi, LOMO on DFL with ball dropout; table in `docs/research/`. |
-| T8/T9 | ready | coordinator | `run.py`, `possession/postprocess.py` | One command -> validated submission (needs H1 to run). |
+| T1 | done | agent-forensics | `docs/research/public_gt.md`, `possession/public_gt_report.py` | Public-GT forensics and scorer sensitivity on synthetic series (see ROUTE_A_PLAN.md T1). |
+| T2 | done | agent-dfl | `scripts/fetch_external.py`, `possession/io_dfl.py`, `possession/test_io_dfl.py` | MD5-checked figshare download to `~/.mtah2027/external/dfl`, DFL -> `FrameTable` npz in `~/.mtah2027/work/dfl`, aggregates only, synthetic XML test. |
+| T7 | done (synthetic only) | agent-atd | `possession/atd.py`, `possession/test_atd.py` | ATD meta+raw -> `FrameTable` on the tactical video timeline; synthetic-file tests; cannot run on real data until H1. |
+| T3 | done | coordinator | `possession/features.py`, `possession/test_features.py` | Identity-free, second-based, period-aware features; CODING.md fixture list. |
+| T4 | done | coordinator | `possession/model.py`, `possession/train.py`, tests | Softmax + Viterbi, LOMO on DFL with ball dropout; table in `docs/research/`. |
+| T9 | blocked on H1 | coordinator | `run.py`, `possession/postprocess.py` | One command -> validated submission (needs H1 to run). |
+
+### Route A evidence (2026-10-26)
+
+- Tests: `scripts/py -m unittest discover -s possession -p 'test_*.py'` -> 43 OK.
+- T2: 14/14 DFL files MD5-verified; 7 matches converted (1,002,651 frames, ball never missing,
+  D 41-52%). Own `iterparse` loader: kloppy keeps a dict per object per frame and drops dead frames.
+- T4: LOMO mean spellF1 0.4048 (Viterbi, emission_scale 0.5) vs 0.2319 for the smooth50 baseline,
+  better on all 7 held-out matches; details and gaps in `docs/research/lomo_dfl.md`.
+- Final model: `scripts/py -m possession.train --fit-all` -> `~/.mtah2027/work/model.npz`, same MD5
+  on two runs. `run.py` exercised end to end on a synthetic ATD in a temp dir: valid submission,
+  byte-for-byte identical across two runs. Not yet run on the real match (H1).
+- Regenerate: `scripts/fetch_external.py` -> `scripts/py -m possession.io_dfl` ->
+  `scripts/py -m possession.train --fit-all` -> `scripts/py run.py --out evaluation/results/route_a.csv`.
+- Next (T9/T10, needs H1): score on the public window with `--bootstrap`, check full-match D share
+  and possession count, ATD-specific augmentation (crowd-biased dropout, slot noise).
 
 ## H0a — local agent configuration
 

@@ -1,7 +1,7 @@
 """Leave-one-match-out training and validation on DFL (ROUTE_A_PLAN.md T4). Aggregates only.
 
     scripts/py -m possession.train                       # LOMO table: baseline vs argmax vs Viterbi
-    scripts/py -m possession.train --fit-all --emission-scale 0.1   # final model -> work dir
+    scripts/py -m possession.train --fit-all                       # final model -> work dir
 
 Model selection happens here, on external matches scored with the official spellF1, never on the
 public 5 minutes (EVALUATION.md misranking trap). Every table gets the same seeded ball dropout,
@@ -29,7 +29,7 @@ SEED = 2027
 DROPOUT_RATE = 0.43        # ATD ball missing share, all frames (DATA.md)
 DROPOUT_MEAN_BLOCK_S = 1.5  # occlusions come in blocks, not single frames
 TRAIN_STEP_S = 0.2         # subsample training rows; neighbours are near-duplicates
-EMISSION_SCALES = (0.02, 0.05, 0.1, 0.2, 0.5)
+EMISSION_SCALES = (0.2, 0.5, 1.0, 2.0, 4.0)
 assert (HOME, AWAY) == (H, A)  # nearest_team_codes and smooth() treat a team code as its label
 
 
@@ -140,7 +140,7 @@ def lomo(tables: list) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--fit-all", action="store_true", help="fit on every match and save")
-    parser.add_argument("--emission-scale", type=float, default=0.1)
+    parser.add_argument("--emission-scale", type=float, default=0.5)  # LOMO peak, docs/research
     args = parser.parse_args()
     tables = load_tables()
     print(f"{len(tables)} DFL matches, {sum(t.n_frames for _, t in tables)} frames")
