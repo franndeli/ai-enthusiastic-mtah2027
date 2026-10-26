@@ -55,5 +55,30 @@ class TestFeatures(unittest.TestCase):
         self.assertEqual(model.p["decode"], {"cost_dead": 40.0, "cost_team": 8.0})
 
 
+class TestGaps(unittest.TestCase):
+    def test_buckets_and_profile(self):
+        from possession import H, A, D
+        from possession.gaps import buckets, gap_summary, label_profile
+        fps = 25.0
+        ball = np.zeros(400)
+        ball[10:20] = np.nan          # 0.4 s gap
+        ball[50:100] = np.nan         # 2 s gap
+        ball[130:400] = np.nan        # cut at the block edge (390): 260 frames, 10.4 s
+        b = buckets(ball, [(5, 390)], fps)
+        self.assertEqual(b[:5].tolist(), [-1] * 5)
+        self.assertTrue((b[10:20] == 1).all() and (b[50:100] == 2).all())
+        self.assertTrue((b[130:390] == 3).all() and (b[390:] == -1).all())
+        s = gap_summary(b)
+        self.assertEqual(s["graded_frames"], 385)
+        self.assertAlmostEqual(s["missing_share"], (10 + 50 + 260) / 385)
+        labels = np.full(400, H, dtype=np.int8)
+        labels[60:70] = A             # one H->A and one A->H change inside the 2 s gap
+        labels[200:300] = D
+        prof = label_profile(b, labels)
+        self.assertEqual(prof["gap 1-10 s"]["team_changes"], 2)
+        self.assertEqual(prof["gap >= 10 s"]["team_changes"], 0)   # D in between is ignored
+        self.assertAlmostEqual(prof["gap >= 10 s"]["D"], 100 / 260)
+
+
 if __name__ == "__main__":
     unittest.main()

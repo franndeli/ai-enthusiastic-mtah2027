@@ -89,6 +89,43 @@ Full-size ATD-format bundle built from sample game 1, models retrained without g
 (`MTAH_EXCLUDE_GAME=1`), scored by the official `run_evaluation.py`: v4 0.581, v3 0.546, b50
 0.287. Same SHA-256 on two runs.
 
+## The missing ball (DATA.md: absent on 41 % of graded frames)
+
+How it is handled, layer by layer:
+
+- **Benchmark.** The degradation hides the ball on 40.7 % of graded frames (the match: 40.7 %,
+  i.e. 59.3 % seen, measured by our reader and stated in DATA.md), in bursts weighted towards
+  crowded situations during play and mostly inside stoppages; 80 % of the missing frames fall in
+  gaps of 10 s or more (other teams publish 86 % for the match). With it, the official baselines
+  score what they score on the match (smooth50 0.247 vs 0.2433, smooth125 0.222 vs 0.2242). v4
+  trains on 15–40 % missing in play, 45–85 % in stoppages and gap medians of 5–15 s.
+- **Features.** "Ball not seen" is kept apart from "ball dead": the dead-ball model reads the
+  players' movement, which needs no ball, plus gap length and whether a gap starts or ends near a
+  line. Team evidence in gaps comes from team shape (2 s and 6 s) and, in v4, from the last team in
+  control carried forward. Gaps up to 0.4 s are interpolated, impossible ball jumps dropped.
+- **Decoder.** Without evidence the Viterbi keeps the current team (CHALLENGE.md: a loose ball stays
+  with the last team). No `X` on graded frames: spellF1 forward-fills it anyway and macroF1 counts
+  it as a miss.
+
+Where it still costs us (external benchmark, default noise, leave one game out, 3 games × 3
+seeds; `scripts/gap_benchmark.py`):
+
+| graded frames | share | truth H / A / D | v4 H / A / D | v4 frame accuracy | team changes per gap, truth / v4 |
+|---|---|---|---|---|---|
+| ball seen | 59.3 % | 41 / 39 / 20 % | 41 / 39 / 20 % | 88.5 % | — |
+| gap < 1 s | 0.2 % | 45 / 40 / 15 % | 35 / 35 / 30 % | 48.9 % | 0.01 / 0.04 |
+| gap 1–10 s | 7.8 % | 27 / 21 / 52 % | 22 / 17 / 61 % | 70.8 % | 0.19 / 0.12 |
+| gap ≥ 10 s | 32.6 % | 16 / 16 / 68 % | 13 / 13 / 74 % | 86.4 % | 0.55 / 0.24 |
+
+Long gaps are mostly stoppages and v4 gets most of their frames right, but it detects fewer than
+half of the possession changes that happen while the ball is missing, and over-calls D inside gaps
+by 6–9 pp. Each missed change merges two possessions, which costs spellF1 twice. With more of the
+ball missing in play (`more_missing_in_play`), truth has 0.81 changes per long gap and v4 0.38.
+
+On the match, `scripts/gap_report.py` prints the same split (without the truth columns, which
+only exist on the benchmark): missing share, gap lengths, the public window's own missing share,
+and each submission's label mix and team changes inside gaps.
+
 ## What to check on the match (local, aggregates only)
 
 - D share: v4 should be well below v3's 61 %, inside or near the 35–47 % others report.
@@ -118,5 +155,6 @@ python scripts/train_model.py ~/mtah-external/sample-data/data               # -
 python scripts/validate_external.py ~/mtah-external/sample-data/data --variants v4,v3 --noise all
 git clone https://github.com/SkillCorner/opendata ~/mtah-external/skillcorner   # needs Git LFS
 python scripts/validate_skillcorner.py ~/mtah-external/skillcorner/data/matches
+python scripts/gap_benchmark.py ~/mtah-external/sample-data/data
 python -m unittest discover -s possession -p 'test_*.py'
 ```
