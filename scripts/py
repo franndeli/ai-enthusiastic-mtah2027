@@ -6,4 +6,9 @@ export MTAH_DATA_DIR="${MTAH_DATA_DIR:-$HOME/.mtah2027/data}"
 export MTAH_WORK_DIR="${MTAH_WORK_DIR:-$HOME/.mtah2027/work}"
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 cd "$ROOT"
-exec "$ROOT/.conda-env/bin/python" "$@"
+# Conda env first (D003); a Windows venv with the same pinned packages as fallback where conda is absent.
+for PY in "$ROOT/.conda-env/bin/python" "$ROOT/.conda-env/python.exe" "$ROOT/.venv/Scripts/python.exe"; do
+  [ -x "$PY" ] && exec "$PY" "$@"
+done
+echo "no project Python found; run scripts/setup-env.sh" >&2
+exit 1
