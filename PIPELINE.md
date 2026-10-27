@@ -18,7 +18,7 @@ Short version for the team. Details and every number: `docs/research/` (v3, v4, 
 ```sh
 python run.py --out evaluation/results/v5.csv                                        # v5 (default)
 python run.py --out evaluation/results/v4.csv --model config/possession_v4.json      # older versions
-python -m unittest discover -s possession -p "test_*.py"                             # 13 tests
+python -m unittest discover -s possession -p "test_*.py"                             # 18 tests
 ```
 
 - The match data is read from `~/.mtah2027/data/tactical/` (or set `MTAH_DATA_DIR` to the folder
@@ -100,9 +100,34 @@ touches, Smart Tagging as team evidence (the reliable tags rarely cover the ball
   regenerates `config/possession_v5.json` byte for byte (checked on Linux; `scripts/fetch_dfl.py`
   downloads DFL).
 
+## Head-to-head with the other two pipelines (27 Oct)
+
+All three team pipelines ran unchanged (their own `run.py` and model) on 20 public matches none of
+them was trained on (SkillCorner, laid out exactly like the challenge's files), scored with the
+official scorer (`scripts/rehearsal.py`, `docs/research/head-to-head-skillcorner.md`):
+
+| pipeline | spellF1 | macroF1 | possessions (truth 293) | D share (truth 51 %) |
+|---|---|---|---|---|
+| **v5** (this branch) | **0.351** | **0.716** | 259 | 43 % |
+| main (Fran) | 0.331 | 0.574 | 309 | 22 % |
+| Route A (Javi, tags off) | 0.315 | 0.581 | 416 | 20 % |
+| official baseline b50 | 0.233 | 0.655 | 496 | 31 % |
+
+v5 − main +0.021 [+0.011, +0.031] (ahead on 18 of 20 matches); v5 − Route A +0.036 [+0.027,
++0.046] (20 of 20). The difference is mostly dead ball: the other two call ~20 % of frames D.
+
+## Ball-detector pilot (next, local)
+
+`scripts/ball_detector_pilot.py` runs a COCO-pretrained YOLO on a slice of the tactical video,
+maps detections to the pitch with the homography and prints aggregates only: agreement with the
+ATD ball, how many ATD gaps it fills, temporal consistency, speed, video/ATD offset. Go criteria
+in `docs/PLAN.md` (B3). Separate venv: `pip install ultralytics==8.4.190 opencv-python==5.0.0.93
+pandas` (plus a CUDA build of torch on a GPU machine).
+
 ## Open items
 
 - Team OK on decisions D005–D009 (`docs/DECISIONS.md`).
-- Fran's method: put it on a branch and run it through the same external tests.
+- The other pipelines: check their full-match D share (aggregate); compliance of public-window
+  calibration with the 23 Oct rules (head-to-head note).
 - Sync the 23 Oct upstream rules (PLAN U1); `AGENTS.md` still says to tune on the public 5 minutes.
 - Pin dependencies (Python 3.11, numpy 2.4.6, pandas 3.0.6) and write the technical document.

@@ -1,0 +1,13 @@
+[
+  {"name": "v5", "cwd": "../ai-enthusiastic-mtah2027",
+   "cmd": ["{python}", "run.py", "--data", "{data}", "--out", "{out}"]},
+  {"name": "routeA", "cwd": "../wt-routea",
+   "cmd": ["{python}", "run.py", "--out", "{out}", "--smart-tagging-weight", "0"],
+   "env": {"MTAH_DATA_DIR": "{data}", "MTAH_WORK_DIR": "../routea-work"}},
+  {"name": "main", "cwd": "../wt-main",
+   "cmd": ["{python}", "run.py", "--out", "{out}", "--no-cache"],
+   "env": {"MTAH_DATA_DIR": "{data}", "MTAH_WORK_DIR": "{tmp}"}},
+  {"name": "b50", "cwd": "../ai-enthusiastic-mtah2027",
+   "cmd": ["{python}", "starter/baseline.py", "--window", "50", "--out", "{outdir}"],
+   "env": {"MTAH_DATA_DIR": "{data}"}, "result": "{outdir}/baseline_smooth50.csv"}
+]
