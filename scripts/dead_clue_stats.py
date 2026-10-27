@@ -33,7 +33,33 @@ def clue(feats: dict, window_s: int, moving_m_s: float = 5.0) -> tuple[np.ndarra
     return moving_w, seen_w
 
 
+def travel_m(feats: dict, span_frames: int) -> np.ndarray:
+    """Distance (m) between the smoothed ball positions span_frames before and after each frame;
+    NaN unless both are seen. Jitter-robust: positions are 0.4 s medians."""
+    from scipy.ndimage import median_filter
+    xy = np.stack([feats["ball_x_norm"], feats["ball_y_norm"]], axis=1).astype(np.float64)
+    seen = ~np.isnan(xy[:, 0])
+    filled = np.where(seen[:, None], xy, 0.0)
+    smooth = np.stack([median_filter(filled[:, k], 10, mode="nearest") for k in range(2)], axis=1)
+    smooth[~seen] = np.nan
+    out = np.full(len(xy), np.nan)
+    delta = (smooth[2 * span_frames:] - smooth[:-2 * span_frames]) * np.array([105.0, 68.0])
+    out[span_frames:-span_frames] = np.sqrt(np.sum(delta * delta, axis=1))
+    return out
+
+
 def report(label: str, feats: dict, codes: np.ndarray, graded: np.ndarray) -> None:
+    for span_s in (1, 2):
+        travel = travel_m(feats, span_s * 25)
+        for name, mask in (("dead", (codes == 2) & graded), ("alive", (codes < 2) & graded)):
+            sel = mask & ~np.isnan(travel)
+            if sel.sum() < 100:
+                continue
+            t = travel[sel]
+            print("{:22} travel over {}s {:5} n={:6d} ({:3.0%})  p10 {:4.1f} p25 {:4.1f} p50 {:4.1f} m  "
+                  "below 1/2/3 m: {:4.0%} {:4.0%} {:4.0%}".format(
+                      label, 2 * span_s, name, int(sel.sum()), sel.sum() / max(mask.sum(), 1),
+                      *np.percentile(t, (10, 25, 50)), *[float(np.mean(t < m)) for m in (1, 2, 3)]))
     for window_s in WINDOWS_S:
         moving_w, seen_w = clue(feats, window_s)
         for name, mask in (("dead", (codes == 2) & graded), ("alive", (codes < 2) & graded)):
