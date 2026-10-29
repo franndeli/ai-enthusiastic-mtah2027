@@ -1,6 +1,6 @@
 # Technical document — MTAH 2027 Phase 1, ball possession
 
-Status: 2026-10-26, candidate v4 (rule evidence + Viterbi). Every number below is produced by a
+Status: 2026-10-28, candidate v5 (rule evidence + Viterbi). Every number below is produced by a
 command in this repository; nothing is hand-labelled or hand-corrected, and nothing is fitted on
 the competition match (organisers' clarification of 2026-10-22, issues #2 and #8).
 
@@ -26,11 +26,17 @@ are not independent votes:
 2. *Last team to play the ball* (`w_touch`, v4): the public ground truth switches owner at the
    opponent's first touch and keeps him through flights, loose balls and clearances (it contains
    0.8 s and 1.3 s possessions). A touch vote is the nearest team while a visible ball is within
-   1.5 m of one of its players, the other team at least 0.5 m farther, for at least 5 frames; the
+   1.5 m of one of its players, the other team at least 0.5 m farther, for at least 3 frames; the
    last vote persists causally, fading with a 20 s constant plus a 5 s constant of the time the
    ball has been unseen, so that in long gaps the ball-free shape takes over. The former
    symmetric gap memory (`w_gap`, hand-over at the middle of a gap) is switched off: on every
    external match the touch memory places hand-overs better.
+   *Pass-by filter* (v5): a vote run during which the ball stays faster than 3 m/s and its
+   velocity never changes (beyond a label-free jitter floor read off the match) is a ball flying
+   past a player, not a touch, and is dropped (11 % of votes on the Metrica judge, at coin-flip
+   precision). *Touch-now* (v5, `w_touch_now`): while a surviving vote is active, 2 nats are
+   added beyond the cap below — a seen touch is the label by definition, the cap is for the
+   proxies. This is what lets 1–4 s possessions (a third of all possessions) be decoded.
 3. *Ball-free team shape* (`w_shape`): the possessing team is longer along its attacking axis
    and wider, the defending team runs more, and the whole block drifts towards the possessor's
    goal. Each team's attack direction is inferred per half from where it keeps its goalkeeper
@@ -50,6 +56,11 @@ are not independent votes:
 7. *Ball travelling* (`w_moving`, v4): the share of a 1 s window with the ball seen faster than
    5 m/s lowers the dead log-odds; the ball stops before the players do and restarts before
    they accelerate, which fixed late restarts and early onsets on the external matches.
+8. *Restart clues* (v5): a player standing more than 0.5 m beyond a line (`w_out_player`: a
+   thrower or a ball retriever; needs no ball; 6–50 times likelier on dead frames on every
+   external match) and a seen ball slower than 2 m/s with nobody within 2.5 m for most of a
+   second (`w_slow_far`: a ball waiting for a restart; alive false-positive rate ≤ 1.4 % on
+   every judge).
 
 A missing ball is **missing evidence, not a dead ball**: it only flattens the team evidence; the
 dead log-odds come from the players and from a projected exit.
@@ -123,14 +134,19 @@ window), so it is used for *relative* decisions, never to set our switching rate
 | v2 + ball-free shape (weights fitted on our match — withdrawn, non-compliant) | 0.5935 | 0.772 | 0.84 / 0.49 | 0.54 / 0.46 | 0.41 / 0.47 / 0.48 | 0.377 / 0.308 | 275, 15.8 s |
 | v3 + dead-ball look-ahead and ball exit | 0.6133 [0.41, 0.79] | 0.824 | 0.87 / 0.65 | 0.55 / 0.46 | 0.42 / 0.49 / 0.48 | 0.405 / 0.332 | 260, 14.8 s, 39% |
 | v3c, shape weights refit on IDSSE | 0.6000 [0.39, 0.78] | 0.827 | 0.87 / 0.64 | 0.54 / 0.43 | 0.40 / 0.42 / 0.48 | 0.414 / 0.345 | 264, 14.6 s, 39% |
-| **v4, last-touch ownership + ball travel (submitted)** | **0.5250 [0.35, 0.70]** | **0.811** | 0.95 / 0.60 | 0.49 / 0.40 | 0.34 / 0.42 / 0.40 | **0.508 / 0.401** | 314, 12.7 s, 37% |
+| v4, last-touch ownership + ball travel | 0.5250 [0.35, 0.70] | 0.811 | 0.95 / 0.60 | 0.49 / 0.40 | 0.34 / 0.42 / 0.40 | 0.508 / 0.397 | 314, 12.7 s, 37% |
+| **v5, pass-by filter + touch-now + restart clues (submitted)** | **0.5333 [0.36, 0.69]** | **0.823** | — | 0.50 / 0.40 | 0.32 / 0.42 / 0.40 | **0.576 / 0.435** | 305, 12.7 s |
 
-v4 is also scored on the Metrica sample matches (clean / noisy spellF1): v3c 0.461 / 0.439,
-v4 **0.563 / 0.528**; every one of the ten external matches improves, clean and noisy. The
-public-window decrease is inside its own interval and is entirely dead-ball handling: with the
-true D frames supplied as a diagnostic both v3c and v4 score 0.600. The organisers' warning that
-the public window ranks even their own baselines wrongly, and the size of the external sample,
-decided the adoption (`docs/DECISIONS.md` D011, `docs/research/last_touch_ownership.md`).
+v4 and v5 are also scored on the Metrica sample matches (clean / noisy spellF1): v3c
+0.461 / 0.439, v4 0.563 / 0.518, v5 **0.605 / 0.570**; at each step every one of the ten
+external matches improves, clean and noisy. v4's public-window decrease is inside its own
+interval and is entirely dead-ball handling: with the true D frames supplied as a diagnostic
+both v3c and v4 score 0.600. The organisers' warning that the public window ranks even their
+own baselines wrongly, and the size of the external sample, decided the adoptions
+(`docs/DECISIONS.md` D011 and D014, `docs/research/last_touch_ownership.md`,
+`docs/research/touch_precision.md`). Oracle experiments on the Metrica judge (true D frames, or
+true team labels, injected into v4's evidence) give 0.657 and 0.810 against 0.563: team
+ownership is the larger remaining loss externally, stoppages on the public window.
 
 Decoder switch costs were swept (2–12 nats, duration-aware variant up to 2 frames): inert on
 IDSSE (±0.003) and within noise on the public window; 6/6/6 kept. Clues tried and rejected on
@@ -152,8 +168,12 @@ These experiments strengthen the transfer warning; they do not change the produc
   players, theirs follows the referee/ball. Four public stoppages are all we could check against.
 - Hand-overs inside long gaps (34.7% of graded frames sit in gaps > 10 s) are placed by shape
   and memory only; the transition-centred stress tests show spellF1 ~0.4–0.5 there.
-- Possessions under 2 s are still mostly missed (external recall ~0.1 at IoU 0.5); 2–4 s ones
-  are found about half the time.
+- Possessions under 2 s are still mostly missed (external recall ~0.1–0.2 at IoU 0.5); 2–4 s
+  ones are found about half the time. 77 % of true hand-overs have a touch vote of the new team
+  within a second; the rest are contested balls where no team is unambiguously nearest.
+- The pass-by filter relies on ball velocity; under the synthetic 0.3 m jitter its threshold
+  rises with the match's own jitter floor and it is nearly inactive, so its gain is measured
+  on clean external tracking. The automatic tracking's real ball jitter is not known.
 - Stoppages in which the automatic tracking keeps seeing a slow ball with players around it
   (the public window's long D stretches) are under-detected, and v4 then splits them into short
   spurious spells; no external data reproduces that regime, so it could not be fixed without

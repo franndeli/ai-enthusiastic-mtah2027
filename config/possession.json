@@ -16,6 +16,7 @@
     "touch_unseen_decay_s": 5.0,
     "w_restart_team": 0.0,
     "team_confidence_max": 0.75,
+    "w_touch_now": 2.0,
     "dead_bias": -1.2,
     "w_slow": 1.5,
     "slow_ref_m_s": 1.5,
@@ -27,6 +28,8 @@
     "w_out": 1.0,
     "w_tag_dead": 0.5,
     "w_moving": 1.5,
+    "w_out_player": 1.0,
+    "w_slow_far": 1.0,
     "dead_confidence_max": 0.8,
     "dead_floor": 0.05
   },
@@ -42,8 +45,9 @@
     "_purpose": "feature rule overrides (possession/features.py constants are the defaults)",
     "touch_radius_m": 1.5,
     "touch_margin_m": 0.5,
-    "touch_min_frames": 5,
-    "ball_moving_m_s": 5.0
+    "touch_min_frames": 3,
+    "ball_moving_m_s": 5.0,
+    "touch_passby_dv_m_s": 2.0
   },
-  "_version": "v4 (W2, 2026-10-26): last-touch ownership + ball-motion alive clue; see docs/PLAN.md W2"
+  "_version": "v5 (W3, 2026-10-28): pass-by touch filter, touch-now evidence, restart clues (out-of-pitch player, slow far ball); see docs/PLAN.md W3"
 }

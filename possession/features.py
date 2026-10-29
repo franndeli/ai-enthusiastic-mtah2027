@@ -146,16 +146,60 @@ def control_features(feats: dict) -> dict:
 TOUCH_RADIUS_M = 1.5             # a player this close to the ball is playing it
 TOUCH_MARGIN_M = 0.5             # ... if no opponent is about as close
 TOUCH_MIN_FRAMES = 5             # a ball flying past a player is nearer for fewer frames
+PASSBY_SPAN_FRAMES = 5           # ball velocity before / after a touch is averaged over 0.2 s
+PASSBY_MIN_SPEED_M_S = 3.0       # a ball that never slows below this while "touched" ...
+PASSBY_MEDIAN_FRAMES = 5         # positions are median-filtered first (tracker jitter)
+PASSBY_FLOOR_MULTIPLE = 2.0      # threshold rises with the match's own jitter floor (median change)
+
+
+def ball_velocity_change(ball_xy: np.ndarray, pitch_m, span: int = PASSBY_SPAN_FRAMES) -> np.ndarray:
+    """|v(after) - v(before)| in m/s at each frame, velocities averaged over `span` frames on
+    either side of median-filtered positions; NaN where either side has an unseen ball. A kick or
+    a controlling touch changes the ball's velocity; a ball flying past a player does not."""
+    from scipy.ndimage import median_filter
+    seen = ~np.isnan(ball_xy[:, 0])
+    filled = np.where(seen[:, None], ball_xy, 0.0).astype(np.float32)
+    xy = np.stack([median_filter(filled[:, k], PASSBY_MEDIAN_FRAMES, mode="nearest")
+                   for k in range(2)], axis=1) * np.asarray(pitch_m, dtype=np.float32)
+    xy[~seen] = np.nan
+    before = np.full_like(xy, np.nan)
+    before[span:] = (xy[span:] - xy[:-span]) * FPS / span
+    after = np.full_like(xy, np.nan)
+    after[:-span] = before[span:]
+    return np.sqrt(np.sum((after - before) ** 2, axis=1)).astype(np.float32)
+
+
+def _passby_runs(vote: np.ndarray, starts: np.ndarray, lengths: np.ndarray, ball_speed: np.ndarray,
+                 velocity_change: np.ndarray, min_change_m_s: float) -> np.ndarray:
+    """Per-run flag: the ball stayed fast through the whole run and its velocity never changed by
+    min_change_m_s within PASSBY_SPAN_FRAMES of it -- it flew past the player untouched."""
+    n = len(vote)
+    flags = np.zeros(len(starts), dtype=bool)
+    for k, (a, length) in enumerate(zip(starts, lengths)):
+        if vote[a] == 0:
+            continue
+        b = a + length
+        speed = ball_speed[a:b]
+        change = velocity_change[max(a - PASSBY_SPAN_FRAMES, 0):min(b + PASSBY_SPAN_FRAMES, n)]
+        if np.all(np.isnan(speed)) or np.all(np.isnan(change)):
+            continue
+        flags[k] = (np.nanmin(speed) > PASSBY_MIN_SPEED_M_S) and (np.nanmax(change) < min_change_m_s)
+    return flags
 
 
 def touch_features(feats: dict, radius_m: float = TOUCH_RADIUS_M, margin_m: float = TOUCH_MARGIN_M,
-                   min_frames: int = TOUCH_MIN_FRAMES) -> dict:
+                   min_frames: int = TOUCH_MIN_FRAMES, passby_dv_m_s: float = 0.0,
+                   ball_xy: np.ndarray | None = None, pitch_m=None) -> dict:
     """Who last played the ball: the ground truth keeps the owner through flights and loose balls
     and switches at the opponent's first touch, so ownership is a causal "last team near the
     ball" memory rather than a centred control window.
 
     touch_vote: +1 / -1 while the nearest home / away player is within radius_m of a visible ball
         and the other team is at least margin_m farther, sustained for min_frames; else 0.
+        With passby_dv_m_s > 0 (needs ball_xy and pitch_m), a run during which the ball stays
+        faster than PASSBY_MIN_SPEED_M_S and never changes velocity by passby_dv_m_s is a ball
+        flying past, not a touch, and is dropped (on Metrica such runs are 11% of votes at 47%
+        precision; the rest are at 84%).
     owner_sign: last non-zero vote (0 before the first); owner_age: frames since it (inf before).
     """
     home = np.where(np.isnan(feats["nearest_home_m"]), np.inf, feats["nearest_home_m"])
@@ -169,6 +213,18 @@ def touch_features(feats: dict, radius_m: float = TOUCH_RADIUS_M, margin_m: floa
         lengths = np.diff(np.concatenate((starts, [n])))
         short = np.repeat(lengths < min_frames, lengths)
         vote = np.where(short, 0.0, vote)
+    if passby_dv_m_s > 0 and n:
+        if ball_xy is None or pitch_m is None:
+            raise ValueError("the pass-by filter needs ball_xy and pitch_m")
+        starts = np.flatnonzero(np.concatenate(([True], vote[1:] != vote[:-1])))
+        lengths = np.diff(np.concatenate((starts, [n])))
+        change = ball_velocity_change(ball_xy, pitch_m)
+        # the tracker's jitter floor, read off the match itself (label-free): a typical frame
+        # has no touch, so the median change is noise, and a real change must stand above it
+        floor = float(np.nanmedian(change)) if np.any(~np.isnan(change)) else 0.0
+        passby = _passby_runs(vote, starts, lengths, feats["ball_speed_m_s"], change,
+                              passby_dv_m_s + PASSBY_FLOOR_MULTIPLE * floor)
+        vote = np.where(np.repeat(passby, lengths), 0.0, vote)
     idx = np.arange(n)
     last = np.maximum.accumulate(np.where(vote != 0, idx, -1))
     owner = np.where(last >= 0, vote[np.maximum(last, 0)], 0.0)
@@ -239,6 +295,40 @@ def team_shape_features(match: Match) -> dict:
     ahead[:-SPEED_LEAD_FRAMES] = smooth[SPEED_LEAD_FRAMES:]
     out["all_mean_speed_lead_m_s"] = np.fmin(smooth, ahead).astype(np.float32)
     return out
+
+
+OUT_PLAYER_MARGIN_M = 0.5        # a player standing this far beyond a line is off the pitch
+OUT_PLAYER_MAX_SPEED_M_S = 1.0   # ... and standing (a thrower, a ball retriever)
+EDGE_M = 2.0                     # a slow ball this close to a line is at a restart spot
+EDGE_MAX_SPEED_M_S = 2.0
+FAR_BALL_M = 2.5                 # a slow ball nobody is within this distance of ...
+FAR_BALL_MAX_SPEED_M_S = 2.0     # ... is waiting for a restart (loose balls get picked up)
+
+
+def restart_features(match: Match, feats: dict) -> dict:
+    """Where restarts happen: a standing player beyond the lines (throw-in, retrieving the ball;
+    needs no ball) and a slow ball at the edge of the pitch. Both as shares of a centred 1 s window.
+    On the external judges a standing out-of-pitch player is 6-50 times likelier on dead frames
+    (scripts/restart_clue_stats.py)."""
+    length, width = match.pitch_m
+    xy, speed = match.players_xy, match.players_speed
+    with np.errstate(invalid="ignore"):
+        beyond = np.maximum.reduce([(-xy[:, :, 0]) * length, (xy[:, :, 0] - 1.0) * length,
+                                    (-xy[:, :, 1]) * width, (xy[:, :, 1] - 1.0) * width])
+        out_player = np.any((beyond > OUT_PLAYER_MARGIN_M) & (speed < OUT_PLAYER_MAX_SPEED_M_S), axis=1)
+        bx, by = feats["ball_x_norm"], feats["ball_y_norm"]
+        edge = np.minimum(np.minimum(bx, 1 - bx) * length, np.minimum(by, 1 - by) * width)
+        edge_slow = (edge < EDGE_M) & (feats["ball_speed_m_s"] < EDGE_MAX_SPEED_M_S)
+        nearest = np.fmin(feats["nearest_home_m"], feats["nearest_away_m"])
+        slow_far = (feats["ball_speed_m_s"] < FAR_BALL_MAX_SPEED_M_S) & (nearest > FAR_BALL_M)
+    return {
+        "ball_slow_far_frac": uniform_filter1d(np.nan_to_num(slow_far.astype(np.float64)),
+                                               BALL_WINDOW_FRAMES, mode="constant").astype(np.float32),
+        "out_player_frac": uniform_filter1d(out_player.astype(np.float64), BALL_WINDOW_FRAMES,
+                                            mode="constant").astype(np.float32),
+        "ball_edge_slow_frac": uniform_filter1d(np.nan_to_num(edge_slow.astype(np.float64)),
+                                                BALL_WINDOW_FRAMES, mode="constant").astype(np.float32),
+    }
 
 
 def _row_percentiles(values: np.ndarray, quantiles) -> np.ndarray:
@@ -368,9 +458,12 @@ def compute(match: Match, tags: list | None = None, params: dict | None = None) 
     feats.update(team_memory_features(feats["control_balance"]))
     feats.update(touch_features(feats, p.get("touch_radius_m", TOUCH_RADIUS_M),
                                 p.get("touch_margin_m", TOUCH_MARGIN_M),
-                                int(p.get("touch_min_frames", TOUCH_MIN_FRAMES))))
+                                int(p.get("touch_min_frames", TOUCH_MIN_FRAMES)),
+                                float(p.get("touch_passby_dv_m_s", 0.0)),
+                                match.ball_xy, match.pitch_m))
     feats.update(team_shape_features(match))
     feats.update(ball_free_shape_features(match))
+    feats.update(restart_features(match, feats))
     if tags is not None:
         feats.update(tagging_features(tags, match.n_frames))
     return feats

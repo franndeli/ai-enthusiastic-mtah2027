@@ -1,6 +1,6 @@
 # MTAH 2027 — current execution plan
 
-Updated: 2026-10-26
+Updated: 2026-10-28
 
 Status vocabulary: `ready`, `in progress`, `blocked`, `done`.
 Only mark done when acceptance evidence is recorded. Evidence is aggregate only (DATA_POLICY.md).
@@ -14,9 +14,34 @@ Only mark done when acceptance evidence is recorded. Evidence is aggregate only 
 | B2 | ready | Data audit (aggregate only) | A script prints coverage statistics: ball visibility per half, track slot counts, any ownership/alive fields in the ATD, Smart Tagging class counts, homography validity. No rows printed. |
 | E1 | done | First method beyond nearest-player smoothing | v3c, see W1 results: public spellF1 0.6000 [0.386, 0.782] (baseline 0.3256), IDSSE noisy 0.345, `scripts/py run.py`. |
 | E2 | done | Short possessions | W2: last-touch ownership (v4). Metrica sample clean/noisy 0.461/0.439 -> 0.563/0.528, IDSSE 0.414/0.344 -> 0.508/0.401, every match up; public 0.600 -> 0.525 [0.35, 0.70] (15 of 17 possessions; 0.600 with oracle dead frames), full match 314 possessions. `docs/research/last_touch_ownership.md`, D011. |
+| E6 | done | Touch precision and restart clues (v5) | W3: pass-by touch filter, touch-now evidence, 3-frame touches, out-of-pitch player and slow-far-ball dead clues. Metrica clean/noisy 0.563/0.518 -> 0.605/0.570, IDSSE 0.508/0.397 -> 0.576/0.435, every match and seed up; public 0.525 -> 0.533 [0.36, 0.69], macro 0.823; 305 full-match possessions. `docs/research/touch_precision.md`, D014. |
 | E5 | ready | Dead-ball stretches with a tracked, slow ball | On the public D stretches the ATD keeps the ball (seen 66% vs 10-22% on Metrica dead frames) and players near it; both v3c and v4 miss them (v4 then splits them into spurious spells). No external judge represents this regime. Candidate ideas measured and rejected in W2 section 5; needs a new observation (e.g. tag-start alignment, restart-kick detection) validated without fitting on the match. |
 | E3 | done (not adopted) | Learned evidence with domain adaptation | V2 tested fixed <2 s external ownership-label coarsening with team-only learning: reserved IDSSE noisy +0.04772, but target/stress regressions; rejected. See `docs/research/factorized_generalization.md`. |
 | E4 | ready | Technical document polish + team name + public repo push | `docs/TECHNICAL.md` exported as `<team>.pdf`; repo pushed; `git ls-files` audit per DATA_POLICY. |
+
+## W3 — touch precision and restart clues (main session), 2026-10-28
+
+Status: done, **v5 adopted** (D014). Single-agent wave after a review of the organisers'
+repository (issues #2–#17, closed PRs 1/7/9/12/13: rules clarifications, a colleague team's HMM
+with sharp speed + edge dead cues at public 0.607). Guard active throughout; aggregates only.
+Full evidence and the rejected ideas: `docs/research/touch_precision.md`.
+
+- Diagnosis on the Metrica judge: possessions under 4 s (45 % of all) have recall 1–40 %; the
+  oracle-team score is 0.81 against 0.56 (oracle-dead 0.66), and re-weighting any existing clue
+  moves the externals by ≤ 0.01. Touch votes whose ball never changes velocity (11 %) are at
+  coin-flip precision; the rest at 84 %.
+- v5 = v4 + pass-by filter (`touch_passby_dv_m_s` 2.0 with a label-free jitter floor), touch-now
+  evidence (`w_touch_now` 2.0), `touch_min_frames` 3, `w_out_player` 1.0, `w_slow_far` 1.0.
+- Results: Metrica clean/noisy 0.563/0.518 -> 0.605/0.570, IDSSE 0.508/0.397 -> 0.576/0.435,
+  all ten matches and both seeds up; public 0.533 [0.36, 0.69] (v4 0.525), macro 0.823,
+  16/17 possessions; transplant 0.496/0.400; tc 0.317/0.415/0.400; 137 tests OK; validator OK;
+  cold/warm identical (sha256 `cfb99407f6abb4f1`); `scripts/verify_submission.py` added.
+- New diagnostics: `scripts/short_spell_stats.py`, `touch_precision_stats.py`,
+  `restart_clue_stats.py`, `speed_domain_stats.py` (the target's player speeds never fall below
+  0.5 m/s the way external tracking does: the slow-share clue does not transfer, mean speed does).
+- Not resolved: E5 (stoppages with a tracked slow ball) remains the public window's main loss;
+  `w_slow_far` touches it only lightly (public D stretches: 6–12 % coverage).
+
 
 ## W2 — last-touch ownership, provider-matched judge (main session), 2026-10-26
 

@@ -146,6 +146,71 @@ class TouchTests(unittest.TestCase):
         self.assertEqual(out["owner_age"][19], 15)
 
 
+class PassByTests(unittest.TestCase):
+    """A ball flying past a player at constant velocity is not a touch; a kick changes velocity."""
+
+    def test_velocity_change_is_zero_on_straight_flight_and_positive_at_a_kick(self):
+        n = 60
+        ball = np.stack([np.arange(n) * 0.004, np.full(n, 0.5)], axis=1).astype(np.float32)  # 10 m/s
+        change = F.ball_velocity_change(ball, PITCH)
+        self.assertLess(float(np.nanmax(change[10:50])), 1e-3)
+        kicked = ball.copy()
+        kicked[30:, 1] = 0.5 + np.arange(n - 30) * 0.004                # +10 m/s sideways from frame 30
+        change = F.ball_velocity_change(kicked, PITCH)
+        self.assertGreater(float(np.nanmax(change[25:36])), 4.9)
+        self.assertLess(float(np.nanmax(change[5:20])), 1e-3)
+        ball[20] = np.nan
+        self.assertTrue(np.isnan(F.ball_velocity_change(ball, PITCH)[20]))
+
+    def test_pass_by_run_is_dropped_but_a_stopping_touch_is_kept(self):
+        n = 80
+        home = np.full(n, 20.0, np.float32)
+        home[30:38] = 0.5                                            # within reach for 8 frames
+        away = np.full(n, 20.0, np.float32)
+        fast = np.stack([np.arange(n) * 0.004, np.full(n, 0.5)], axis=1).astype(np.float32)
+        feats = {"nearest_home_m": home, "nearest_away_m": away,
+                 "ball_present": np.ones(n, np.float32),
+                 "ball_speed_m_s": F.ball_speed_from_positions(fast, PITCH)}
+        plain = F.touch_features(feats)
+        self.assertTrue((plain["touch_vote"][30:38] == 1).all())
+        filtered = F.touch_features(feats, passby_dv_m_s=1.5, ball_xy=fast, pitch_m=PITCH)
+        self.assertTrue((filtered["touch_vote"] == 0).all())         # flew past untouched
+        stopped = fast.copy()
+        stopped[34:] = stopped[34]                                   # the player stops it
+        feats["ball_speed_m_s"] = F.ball_speed_from_positions(stopped, PITCH)
+        kept = F.touch_features(feats, passby_dv_m_s=1.5, ball_xy=stopped, pitch_m=PITCH)
+        self.assertTrue((kept["touch_vote"][30:38] == 1).all())
+        with self.assertRaises(ValueError):
+            F.touch_features(feats, passby_dv_m_s=1.5)
+
+
+class RestartFeatureTests(unittest.TestCase):
+    def test_standing_player_beyond_the_line_is_a_restart_clue(self):
+        n = 50
+        match = make_match(n, still_ball(n, 0.5, 0.5), home_xy=(0.5, -0.02), speed=0.3)  # 1 m out
+        out = F.restart_features(match, F.ball_features(match))
+        self.assertGreater(float(out["out_player_frac"][25]), 0.9)
+        match.players_speed[:] = 3.0                                 # running past the line: no
+        out = F.restart_features(match, F.ball_features(match))
+        self.assertEqual(float(out["out_player_frac"].max()), 0.0)
+        match = make_match(n, still_ball(n, 0.5, 0.5), home_xy=(0.5, 0.004), speed=0.3)   # inside
+        out = F.restart_features(match, F.ball_features(match))
+        self.assertEqual(float(out["out_player_frac"].max()), 0.0)
+
+    def test_slow_far_ball_needs_nobody_near_and_a_seen_slow_ball(self):
+        n = 50
+        far = make_match(n, still_ball(n, 0.3, 0.3))                 # players 20+ m away
+        out = F.restart_features(far, F.ball_features(far))
+        self.assertGreater(float(out["ball_slow_far_frac"][25]), 0.9)
+        near = make_match(n, still_ball(n, 0.3, 0.3), home_xy=(0.31, 0.3))  # 1 m away
+        out = F.restart_features(near, F.ball_features(near))
+        self.assertEqual(float(out["ball_slow_far_frac"].max()), 0.0)
+        unseen = make_match(n)
+        out = F.restart_features(unseen, F.ball_features(unseen))
+        self.assertEqual(float(out["ball_slow_far_frac"].max()), 0.0)
+        self.assertEqual(float(out["ball_edge_slow_frac"].max()), 0.0)
+
+
 class BallMotionTests(unittest.TestCase):
     def test_moving_share_counts_only_seen_fast_frames(self):
         speed = np.full(100, np.nan, np.float32)

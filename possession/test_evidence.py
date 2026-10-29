@@ -106,6 +106,23 @@ class TeamEvidenceTests(unittest.TestCase):
         np.testing.assert_allclose(ev[:, H], np.log(1 - np.exp(d_ctrl)), rtol=1e-4)
 
 
+class TouchNowEvidenceTests(unittest.TestCase):
+    n = 50
+
+    def test_touch_now_adds_beyond_the_cap_only_while_voting_and_is_switchable(self):
+        f = flat_features(self.n)
+        f["control_balance"][:] = 1.0                                  # saturates the cap
+        f["touch_vote"] = np.zeros(self.n, np.float32)
+        f["touch_vote"][10:20] = 1.0
+        f["touch_vote"][30:40] = -1.0
+        capped = team_pref(E.scores(f))
+        boosted = team_pref(E.scores(f, {"w_touch_now": 2.0}))
+        np.testing.assert_allclose(boosted[:10], capped[:10])
+        np.testing.assert_allclose(boosted[10:20], capped[10:20] + 2.0)
+        np.testing.assert_allclose(boosted[30:40], capped[30:40] - 2.0)
+        self.assertTrue(np.isfinite(boosted).all())
+
+
 class ShapeEvidenceTests(unittest.TestCase):
     n = 50
 
@@ -166,6 +183,16 @@ class DeadEvidenceTests(unittest.TestCase):
         base = E.scores(f)[:, D]
         f["ball_out_frac"][:] = 1.0
         self.assertTrue((E.scores(f)[:, D] > base).all())
+
+    def test_restart_clues_raise_dead_and_are_off_by_default(self):
+        f = flat_features(self.n)
+        base = E.scores(f)[:, D]
+        f["out_player_frac"] = np.ones(self.n, np.float32)
+        f["ball_slow_far_frac"] = np.ones(self.n, np.float32)
+        f["ball_edge_slow_frac"] = np.ones(self.n, np.float32)
+        np.testing.assert_allclose(E.scores(f)[:, D], base)
+        for key in ("w_out_player", "w_slow_far", "w_edge"):
+            self.assertTrue((E.scores(f, {key: 1.0})[:, D] > base).all(), key)
 
     def test_tag_is_capped_prior_not_label(self):
         f = flat_features(self.n)

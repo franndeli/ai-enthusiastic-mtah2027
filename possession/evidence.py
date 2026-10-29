@@ -41,6 +41,8 @@ DEFAULT_PARAMS = {
                                    # so the ball-free shape evidence takes over in long gaps
     "w_restart_team": 0.0,         # team taking a tagged set piece owns the ball right after it
     "team_confidence_max": 0.75,   # |team logit| <= logit(this)
+    "w_touch_now": 0.0,            # extra, uncapped evidence while a player is seen playing the
+                                   # ball (touch_vote): short spells need sharp evidence
     # --- dead-ball evidence ---
     "dead_bias": -1.2,             # log-odds of dead on a frame with no clue
     "w_slow": 1.5,                 # players walking: low smoothed mean speed
@@ -53,6 +55,9 @@ DEFAULT_PARAMS = {
     "w_exit": 0.5,                 # ball left the pitch (seen or projected) and is not back yet
     "w_tag_dead": 0.5,             # inside a tagged set-piece window
     "w_moving": 1.5,               # ball seen travelling (> 5 m/s): in play (negative dead evidence)
+    "w_out_player": 0.0,           # a standing player beyond the lines (thrower, ball retriever)
+    "w_edge": 0.0,                 # a slow ball within 2 m of a line (restart spot)
+    "w_slow_far": 0.0,             # a slow ball seen with nobody within 2.5 m (waiting for a restart)
     "dead_confidence_max": 0.8,    # dead probability clipped to [dead_floor, this]
     "dead_floor": 0.05,
 }
@@ -95,7 +100,10 @@ def team_logit(features: dict, p: dict) -> np.ndarray:
         z = z + p["w_restart_team"] * features["restart_team"]
 
     cap = _logit(p["team_confidence_max"])
-    return np.clip(z, -cap, cap)
+    z = np.clip(z, -cap, cap)
+    if p["w_touch_now"] and "touch_vote" in features:
+        z = z + p["w_touch_now"] * features["touch_vote"]
+    return z
 
 
 def dead_logit(features: dict, p: dict) -> np.ndarray:
@@ -117,6 +125,12 @@ def dead_logit(features: dict, p: dict) -> np.ndarray:
         z = z + p["w_tag_dead"] * features["tag_set_piece"]
     if p["w_moving"] and "ball_moving_frac" in features:
         z = z - p["w_moving"] * features["ball_moving_frac"]
+    if p["w_out_player"] and "out_player_frac" in features:
+        z = z + p["w_out_player"] * _zero_nan(features["out_player_frac"])
+    if p["w_edge"] and "ball_edge_slow_frac" in features:
+        z = z + p["w_edge"] * _zero_nan(features["ball_edge_slow_frac"])
+    if p["w_slow_far"] and "ball_slow_far_frac" in features:
+        z = z + p["w_slow_far"] * _zero_nan(features["ball_slow_far_frac"])
     return z
 
 

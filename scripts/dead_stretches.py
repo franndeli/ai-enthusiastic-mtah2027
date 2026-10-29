@@ -33,14 +33,14 @@ def main() -> int:
         pred = label_codes_from_config(config, match, tags)
     graded = np.flatnonzero(gt != 3)
     runs = [(int(graded[0]), int(graded[-1]) + 1)]
-    print("seg lab  dur_s ball% dead_z slow_z  spd  out%  exit% tag% touch% move% gap_s  pred: D% nspells")
+    print("seg lab  dur_s ball% dead_z slow_z  spd  out%  exit% tag% touch% move% gap_s outp% edge% nearest_m  pred: D% nspells")
     for a, b, k in pm.segments(gt, runs):
         sl = slice(a, b)
         speed = feats["all_mean_speed_lead_m_s"][sl]
         slow = np.clip((p["slow_ref_m_s"] - speed) / p["slow_scale_m_s"], -2, 2)
         n_spells = len(pm.possession_spells(pred, [(a, b)]))
         gap = feats["frames_since_ball"][sl] + feats["frames_until_ball"][sl]
-        print("{} {:>4.1f}s {:4.0f} {:+6.2f} {:+6.2f} {:4.2f} {:4.0f} {:5.0f} {:4.0f} {:5.0f} {:5.0f} {:5.1f}  {:4.0f} {:3d}".format(
+        print("{} {:>4.1f}s {:4.0f} {:+6.2f} {:+6.2f} {:4.2f} {:4.0f} {:5.0f} {:4.0f} {:5.0f} {:5.0f} {:5.1f} {:5.0f} {:5.0f} {:9.1f}  {:4.0f} {:3d}".format(
             LABELS[k], (b - a) / 25.0, 100 * np.mean(feats["ball_present"][sl]),
             float(np.mean(dead_z)) if False else float(np.mean(dead_z[sl])),
             float(np.nanmean(slow)), float(np.nanmean(speed)),
@@ -50,6 +50,9 @@ def main() -> int:
             100 * float(np.mean(feats["touch_vote"][sl] != 0)),
             100 * float(np.mean(feats["ball_moving_frac"][sl])),
             float(np.median(np.where(np.isinf(gap), 0, gap))) / 25.0,
+            100 * float(np.mean(feats["out_player_frac"][sl])),
+            100 * float(np.mean(feats["ball_edge_slow_frac"][sl])),
+            float(np.nanmedian(np.fmin(feats["nearest_home_m"][sl], feats["nearest_away_m"][sl]))),
             100 * float(np.mean(pred[sl] == 2)), n_spells))
     return 0
 
