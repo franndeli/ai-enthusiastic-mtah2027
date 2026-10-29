@@ -58,6 +58,7 @@ DEFAULT_PARAMS = {
     "w_out_player": 0.0,           # a standing player beyond the lines (thrower, ball retriever)
     "w_edge": 0.0,                 # a slow ball within 2 m of a line (restart spot)
     "w_slow_far": 0.0,             # a slow ball seen with nobody within 2.5 m (waiting for a restart)
+    "w_quiet": 0.0,                # ... and the players walking: nobody is playing
     "dead_confidence_max": 0.8,    # dead probability clipped to [dead_floor, this]
     "dead_floor": 0.05,
 }
@@ -131,6 +132,8 @@ def dead_logit(features: dict, p: dict) -> np.ndarray:
         z = z + p["w_edge"] * _zero_nan(features["ball_edge_slow_frac"])
     if p["w_slow_far"] and "ball_slow_far_frac" in features:
         z = z + p["w_slow_far"] * _zero_nan(features["ball_slow_far_frac"])
+    if p["w_quiet"] and "restart_quiet_frac" in features:
+        z = z + p["w_quiet"] * _zero_nan(features["restart_quiet_frac"])
     return z
 
 

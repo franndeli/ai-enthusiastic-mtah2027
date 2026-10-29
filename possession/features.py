@@ -303,13 +303,33 @@ EDGE_M = 2.0                     # a slow ball this close to a line is at a rest
 EDGE_MAX_SPEED_M_S = 2.0
 FAR_BALL_M = 2.5                 # a slow ball nobody is within this distance of ...
 FAR_BALL_MAX_SPEED_M_S = 2.0     # ... is waiting for a restart (loose balls get picked up)
+QUIET_PLAYERS_M_S = 1.8          # a ball that travels under QUIET_TRAVEL_M in 2 s with nobody within
+QUIET_TRAVEL_M = 8.0             # QUIET_FAR_M while the players walk: nobody is playing (a ball
+QUIET_FAR_M = 2.0                # carried or drifting during a stoppage)
+
+
+def ball_travel_m(ball_xy: np.ndarray, pitch_m, span: int) -> np.ndarray:
+    """Distance in metres between the ball positions `span` frames before and after each frame,
+    positions median-filtered over 0.4 s so that tracker jitter does not read as travel; NaN
+    unless both are seen."""
+    from scipy.ndimage import median_filter
+    seen = ~np.isnan(ball_xy[:, 0])
+    filled = np.where(seen[:, None], ball_xy, 0.0).astype(np.float64)
+    smooth = np.stack([median_filter(filled[:, k], 10, mode="nearest") for k in range(2)], axis=1)
+    smooth[~seen] = np.nan
+    out = np.full(len(ball_xy), np.nan, dtype=np.float32)
+    delta = (smooth[2 * span:] - smooth[:-2 * span]) * np.asarray(pitch_m, dtype=np.float64)
+    out[span:-span] = np.sqrt(np.sum(delta * delta, axis=1))
+    return out
 
 
 def restart_features(match: Match, feats: dict) -> dict:
     """Where restarts happen: a standing player beyond the lines (throw-in, retrieving the ball;
-    needs no ball) and a slow ball at the edge of the pitch. Both as shares of a centred 1 s window.
-    On the external judges a standing out-of-pitch player is 6-50 times likelier on dead frames
-    (scripts/restart_clue_stats.py)."""
+    needs no ball), a slow ball at the edge of the pitch, a slow ball nobody is near, and the
+    "quiet" conjunction of a slow far ball with walking players. All as shares of a centred 1 s
+    window. On the external judges a standing out-of-pitch player is 6-50 times likelier on dead
+    frames, and the quiet conjunction has an alive false-positive rate of 0.0-0.5 % on every judge
+    (scripts/restart_clue_stats.py, scripts/tracked_dead_stats.py). Needs team_shape_features."""
     length, width = match.pitch_m
     xy, speed = match.players_xy, match.players_speed
     with np.errstate(invalid="ignore"):
@@ -321,7 +341,12 @@ def restart_features(match: Match, feats: dict) -> dict:
         edge_slow = (edge < EDGE_M) & (feats["ball_speed_m_s"] < EDGE_MAX_SPEED_M_S)
         nearest = np.fmin(feats["nearest_home_m"], feats["nearest_away_m"])
         slow_far = (feats["ball_speed_m_s"] < FAR_BALL_MAX_SPEED_M_S) & (nearest > FAR_BALL_M)
+        # jitter-robust ball travel: distance between 0.4 s-median positions 1 s either side
+        quiet = (ball_travel_m(match.ball_xy, match.pitch_m, FPS) < QUIET_TRAVEL_M) \
+            & (nearest > QUIET_FAR_M) & (feats["all_mean_speed_smooth_m_s"] < QUIET_PLAYERS_M_S)
     return {
+        "restart_quiet_frac": uniform_filter1d(np.nan_to_num(quiet.astype(np.float64)),
+                                               2 * FPS, mode="constant").astype(np.float32),
         "ball_slow_far_frac": uniform_filter1d(np.nan_to_num(slow_far.astype(np.float64)),
                                                BALL_WINDOW_FRAMES, mode="constant").astype(np.float32),
         "out_player_frac": uniform_filter1d(out_player.astype(np.float64), BALL_WINDOW_FRAMES,

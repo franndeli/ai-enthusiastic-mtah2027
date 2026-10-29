@@ -184,31 +184,44 @@ class PassByTests(unittest.TestCase):
             F.touch_features(feats, passby_dv_m_s=1.5)
 
 
+def restart(match):
+    feats = F.ball_features(match)
+    feats.update(F.team_shape_features(match))
+    return F.restart_features(match, feats)
+
+
 class RestartFeatureTests(unittest.TestCase):
     def test_standing_player_beyond_the_line_is_a_restart_clue(self):
         n = 50
         match = make_match(n, still_ball(n, 0.5, 0.5), home_xy=(0.5, -0.02), speed=0.3)  # 1 m out
-        out = F.restart_features(match, F.ball_features(match))
-        self.assertGreater(float(out["out_player_frac"][25]), 0.9)
+        self.assertGreater(float(restart(match)["out_player_frac"][25]), 0.9)
         match.players_speed[:] = 3.0                                 # running past the line: no
-        out = F.restart_features(match, F.ball_features(match))
-        self.assertEqual(float(out["out_player_frac"].max()), 0.0)
+        self.assertEqual(float(restart(match)["out_player_frac"].max()), 0.0)
         match = make_match(n, still_ball(n, 0.5, 0.5), home_xy=(0.5, 0.004), speed=0.3)   # inside
-        out = F.restart_features(match, F.ball_features(match))
-        self.assertEqual(float(out["out_player_frac"].max()), 0.0)
+        self.assertEqual(float(restart(match)["out_player_frac"].max()), 0.0)
 
     def test_slow_far_ball_needs_nobody_near_and_a_seen_slow_ball(self):
         n = 50
         far = make_match(n, still_ball(n, 0.3, 0.3))                 # players 20+ m away
-        out = F.restart_features(far, F.ball_features(far))
-        self.assertGreater(float(out["ball_slow_far_frac"][25]), 0.9)
+        self.assertGreater(float(restart(far)["ball_slow_far_frac"][25]), 0.9)
         near = make_match(n, still_ball(n, 0.3, 0.3), home_xy=(0.31, 0.3))  # 1 m away
-        out = F.restart_features(near, F.ball_features(near))
-        self.assertEqual(float(out["ball_slow_far_frac"].max()), 0.0)
+        self.assertEqual(float(restart(near)["ball_slow_far_frac"].max()), 0.0)
         unseen = make_match(n)
-        out = F.restart_features(unseen, F.ball_features(unseen))
+        out = restart(unseen)
         self.assertEqual(float(out["ball_slow_far_frac"].max()), 0.0)
         self.assertEqual(float(out["ball_edge_slow_frac"].max()), 0.0)
+        self.assertEqual(float(out["restart_quiet_frac"].max()), 0.0)
+
+    def test_quiet_needs_walking_players_and_an_unattended_slow_ball(self):
+        n = 100
+        quiet = make_match(n, still_ball(n, 0.3, 0.3), speed=1.0)    # everyone walks, ball alone
+        self.assertGreater(float(restart(quiet)["restart_quiet_frac"][50]), 0.9)
+        running = make_match(n, still_ball(n, 0.3, 0.3), speed=3.0)
+        self.assertEqual(float(restart(running)["restart_quiet_frac"].max()), 0.0)
+        flight = np.stack([0.1 + np.arange(n) * 0.004, np.full(n, 0.3)], axis=1)  # 10 m/s
+        self.assertEqual(float(restart(make_match(n, flight, speed=1.0))["restart_quiet_frac"].max()), 0.0)
+        travel = F.ball_travel_m(flight.astype(np.float32), PITCH, FPS)
+        np.testing.assert_allclose(travel[40], 20.0, rtol=0.05)
 
 
 class BallMotionTests(unittest.TestCase):

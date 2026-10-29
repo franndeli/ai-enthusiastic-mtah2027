@@ -190,8 +190,9 @@ class DeadEvidenceTests(unittest.TestCase):
         f["out_player_frac"] = np.ones(self.n, np.float32)
         f["ball_slow_far_frac"] = np.ones(self.n, np.float32)
         f["ball_edge_slow_frac"] = np.ones(self.n, np.float32)
+        f["restart_quiet_frac"] = np.ones(self.n, np.float32)
         np.testing.assert_allclose(E.scores(f)[:, D], base)
-        for key in ("w_out_player", "w_slow_far", "w_edge"):
+        for key in ("w_out_player", "w_slow_far", "w_edge", "w_quiet"):
             self.assertTrue((E.scores(f, {key: 1.0})[:, D] > base).all(), key)
 
     def test_tag_is_capped_prior_not_label(self):

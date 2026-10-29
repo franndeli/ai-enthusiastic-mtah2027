@@ -15,7 +15,7 @@ Only mark done when acceptance evidence is recorded. Evidence is aggregate only 
 | E1 | done | First method beyond nearest-player smoothing | v3c, see W1 results: public spellF1 0.6000 [0.386, 0.782] (baseline 0.3256), IDSSE noisy 0.345, `scripts/py run.py`. |
 | E2 | done | Short possessions | W2: last-touch ownership (v4). Metrica sample clean/noisy 0.461/0.439 -> 0.563/0.528, IDSSE 0.414/0.344 -> 0.508/0.401, every match up; public 0.600 -> 0.525 [0.35, 0.70] (15 of 17 possessions; 0.600 with oracle dead frames), full match 314 possessions. `docs/research/last_touch_ownership.md`, D011. |
 | E6 | done | Touch precision and restart clues (v5) | W3: pass-by touch filter, touch-now evidence, 3-frame touches, out-of-pitch player and slow-far-ball dead clues. Metrica clean/noisy 0.563/0.518 -> 0.605/0.570, IDSSE 0.508/0.397 -> 0.576/0.435, every match and seed up; public 0.525 -> 0.533 [0.36, 0.69], macro 0.823; 305 full-match possessions. `docs/research/touch_precision.md`, D014. |
-| E5 | ready | Dead-ball stretches with a tracked, slow ball | On the public D stretches the ATD keeps the ball (seen 66% vs 10-22% on Metrica dead frames) and players near it; both v3c and v4 miss them (v4 then splits them into spurious spells). No external judge represents this regime. Candidate ideas measured and rejected in W2 section 5; needs a new observation (e.g. tag-start alignment, restart-kick detection) validated without fitting on the match. |
+| E5 | blocked | Dead-ball stretches with a tracked, slow ball | On the public D stretches the ATD keeps reporting a ball moving at walking pace ~3 m from the players (seen 66% vs 10-22% on Metrica dead frames); v5 still misses two of the four. W3 measured the regime (`docs/research/tracked_ball_stoppages.md`): the conjunction clues with no alive false positives (`w_out_player`, `w_slow_far` adopted; `w_quiet`, `w_edge` implemented, off) cover at most a tenth of those frames, the broad "slow ball + walking players" clue is wrong on 3-7% of alive frames on every judge, and Metrica's seen-ball dead frames are label slop. Blocked on a judge that contains the regime (corrected same-provider tracking, or an externally trained video ball detector). |
 | E3 | done (not adopted) | Learned evidence with domain adaptation | V2 tested fixed <2 s external ownership-label coarsening with team-only learning: reserved IDSSE noisy +0.04772, but target/stress regressions; rejected. See `docs/research/factorized_generalization.md`. |
 | E4 | ready | Technical document polish + team name + public repo push | `docs/TECHNICAL.md` exported as `<team>.pdf`; repo pushed; `git ls-files` audit per DATA_POLICY. |
 
@@ -41,6 +41,10 @@ Full evidence and the rejected ideas: `docs/research/touch_precision.md`.
   0.5 m/s the way external tracking does: the slow-share clue does not transfer, mean speed does).
 - Not resolved: E5 (stoppages with a tracked slow ball) remains the public window's main loss;
   `w_slow_far` touches it only lightly (public D stretches: 6–12 % coverage).
+- E5 follow-up (same session): the target's tracked-ball stoppages measured against Metrica
+  (`scripts/tracked_dead_stats.py`); `w_quiet` (unattended slow ball + walking players) and a
+  jitter-robust ball-motion clue implemented and measured: no public gain, Metrica -0.001/-0.008;
+  `w_quiet` kept off. `docs/research/tracked_ball_stoppages.md`; E5 marked blocked.
 
 
 ## W2 — last-touch ownership, provider-matched judge (main session), 2026-10-26
