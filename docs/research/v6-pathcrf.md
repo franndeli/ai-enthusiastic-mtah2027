@@ -1,7 +1,8 @@
 # v6: PathCRF as ball-free team evidence (2026-10-30)
 
-Status: implemented (`config/possession_v6.json`, opt-in with `--model`), validated on public data;
-the local check on the match decides whether it becomes the default of `run.py`.
+Status: default of `run.py` since 30 Oct (`config/possession_v6.json`, decision D010), after the
+validation on public data and the local check on the match below. v5 stays selectable with
+`--model config/possession_v5.json`.
 
 ## Why
 
@@ -82,6 +83,20 @@ extrapolated (pc6, pc7), where PathCRF hurts. The match is not like that (tracki
 Criteria, set beforehand: valid file; same SHA-256 on two runs; PathCRF covers ≥ 85 % of the alive
 frames; D share identical to v5 (51.5 %); possessions above v5's 221 and below ~290 (validation:
 +6 % to +14 %); public 5 minutes as a sanity check only.
+
+Result (30 Oct, Ángel's machine, Windows, CPU torch 2.14.1; aggregates only): all pass.
+
+| criterion | target | result |
+|---|---|---|
+| official validator | valid | valid |
+| same SHA-256 on two runs | yes | yes: `c961f5f214912857933721c1661874499825e3b43ad91eade3f4f509d3fae120` |
+| PathCRF coverage of the alive frames | ≥ 85 % | 100.0 % (101 s and 87 s) |
+| D share of graded frames | 51.5 % (v5) | 51.5 % |
+| possessions | 221 < n < ~290 | 247 (+12 %), mean 12.5 s, median 7.8 s |
+
+Still to do: the same SHA-256 on a second machine (Fran's), which is what the organisers will
+check (RULES rule 3); `run.py` records the torch, torch_geometric and scipy versions in its
+manifest to help if it differs.
 
 ## Credits and licence
 

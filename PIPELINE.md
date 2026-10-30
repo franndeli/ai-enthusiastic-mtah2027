@@ -7,10 +7,9 @@ Short version for the team. Details and every number: `docs/research/` (v3, v4, 
 
 - For each of the 199,319 frames of the tactical video we output `H`, `A` or `D` (and `X` outside
   the graded halves), from the automatic tracking only.
-- The current version is **v5**. It is the default of `run.py`.
-- **v6** (v5 + PathCRF, a published model that infers possession from the players' movement
-  without the ball) is ready and validated on public data (+0.04 spellF1); it becomes the default
-  after the local check on the match (`docs/research/v6-pathcrf.md`).
+- The current version is **v6**, the default of `run.py`: v5 plus PathCRF, a published model that
+  infers possession from the players' movement without the ball. +0.04 spellF1 over v5 on public
+  data; it passed the local check on the match on 30 Oct (`docs/research/v6-pathcrf.md`).
 - We **never tune on the public 5 minutes**. We test on **30 full matches from other teams** that do
   have labels, with their tracking made as bad as ours.
 - On the DFL matches v5 scores **0.60 spellF1, against 0.25 for the official baseline**
@@ -19,15 +18,17 @@ Short version for the team. Details and every number: `docs/research/` (v3, v4, 
 ## Run it
 
 ```sh
-python run.py --out evaluation/results/v5.csv                                        # v5 (default)
-python run.py --out evaluation/results/v6.csv --model config/possession_v6.json      # v6 (+ PathCRF)
+python run.py --out evaluation/results/v6.csv                                        # v6 (default)
+python run.py --out evaluation/results/v5.csv --model config/possession_v5.json      # v5, no PyTorch
 python run.py --out evaluation/results/v4.csv --model config/possession_v4.json      # older versions
-python -m unittest discover -s possession -p "test_*.py"                             # 21 tests
+python -m unittest discover -s possession -p "test_*.py"                             # 24 tests
 ```
 
 - v6 needs CPU-only PyTorch and four small packages, pinned:
   `pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu` then
-  `pip install -r requirements-v6.txt`. It adds a few minutes on CPU and is deterministic.
+  `pip install -r requirements-v6.txt`. Without them `run.py` stops at once and says so. It adds
+  1–5 minutes on CPU and is deterministic: on the match it gives SHA-256
+  `c961f5f214912857933721c1661874499825e3b43ad91eade3f4f509d3fae120` (Ángel's machine, twice).
 
 - The match data is read from `~/.mtah2027/data/tactical/` (or set `MTAH_DATA_DIR` to the folder
   that contains `tactical/`).
@@ -47,10 +48,15 @@ python -m unittest discover -s possession -p "test_*.py"                        
      the half), ball out of the pitch, still ball, long gaps that start or end near a line.
 3. **Two small logistic regressions** (`possession/model.py`) turn that evidence into "probability
    the ball is dead" and "probability home has it". Their coefficients live in
-   `config/possession_v5.json` and were trained **only on public data about other games**.
+   `config/possession_v6.json` (the same as v5's) and were trained **only on public data about
+   other games**.
 4. **Decoder** (`possession/decode.py`): an exact Viterbi with a cost per switch, so possessions are
    long and stable instead of flickering, and each boundary lands where the evidence changes.
-5. **Write and check** the CSV (`possession/pipeline.py`); before each half's kick-off (Smart
+5. **Second opinion without the ball (v6)** (`possession/retrack.py`, `possession/pathcrf.py`):
+   the tracklets are joined into 11 tracks per team, PathCRF's pretrained model estimates which team
+   has the ball inside the stretches decoded as alive, that evidence is added to the team model and
+   the decoder runs again. Dead ball is unchanged.
+6. **Write and check** the CSV (`possession/pipeline.py`); before each half's kick-off (Smart
    Tagging) the ball is dead.
 
 ## Why not the public 5 minutes
@@ -85,8 +91,8 @@ python -m unittest discover -s possession -p "test_*.py"                        
 | baseline | official `smooth50` | 0.246 | 0.233 | 594 / 32 % |
 | v3 | Viterbi decoder, learned dead ball, touch and team-shape evidence | 0.580 | 0.303 | 220 / 61 % (too much dead ball) |
 | v4 | dead-ball evidence that does not depend on the tracker's noise; trained on many noise models | 0.589 | 0.341 | 223 / 50 % |
-| **v5** | v4 also trained on the 7 DFL matches | **0.598** | **0.351** | 221 / 52 % |
-| v6 (pending local check) | v5 + PathCRF ball-free team evidence | +0.044 on 2 DFL matches held out by PathCRF (Metrica: +0.037) | not applicable (broadcast tracking: −0.02) | pending |
+| v5 | v4 also trained on the 7 DFL matches | 0.598 | 0.351 | 221 / 52 % |
+| **v6** | v5 + PathCRF ball-free team evidence | **+0.044** on 2 DFL matches held out by PathCRF (Metrica: +0.037) | not applicable (broadcast tracking: −0.02) | 247 / 52 % |
 
 - v4 fixed the main problem of v3 on our match: it was calling 61 % of the match dead ball.
 - v6 only helps when nearly all players are tracked with smooth positions; our match's tracking
@@ -104,9 +110,11 @@ touches, Smart Tagging as team evidence (the reliable tags rarely cover the ball
 
 - The match data never leaves the local machine. In the Claude sessions behind this branch only
   aggregate numbers (scores, counts) were shared, never rows of tracking or labels.
-- External data, credited in the technical document: Metrica Sports sample data; SkillCorner open
-  data (MIT); Sportec Open DFL (CC-BY 4.0, data © Deutsche Fußball Liga — cite Bassek, Rein, Weber
-  & Memmert 2025, *Scientific Data* 12, 195, doi:10.1038/s41597-025-04505-y).
+- External data and models, credited in the technical document: Metrica Sports sample data;
+  SkillCorner open data (MIT); Sportec Open DFL (CC-BY 4.0, data © Deutsche Fußball Liga — cite
+  Bassek, Rein, Weber & Memmert 2025, *Scientific Data* 12, 195, doi:10.1038/s41597-025-04505-y);
+  PathCRF code and pretrained weights (MPL-2.0, vendored unmodified in `third_party/pathcrf` — cite
+  Kim et al., KDD 2026, doi:10.1145/3770855.3818152).
 - Reproducible: `python scripts/train_model.py <sample-data/data> --version v5 --dfl <dfl folder>`
   regenerates `config/possession_v5.json` byte for byte (checked on Linux; `scripts/fetch_dfl.py`
   downloads DFL).
@@ -127,17 +135,17 @@ official scorer (`scripts/rehearsal.py`, `docs/research/head-to-head-skillcorner
 v5 − main +0.021 [+0.011, +0.031] (ahead on 18 of 20 matches); v5 − Route A +0.036 [+0.027,
 +0.046] (20 of 20). The difference is mostly dead ball: the other two call ~20 % of frames D.
 
-## Ball-detector pilot (next, local)
+## Ball-detector pilot (done: no-go, parked)
 
-`scripts/ball_detector_pilot.py` runs a COCO-pretrained YOLO on a slice of the tactical video,
-maps detections to the pitch with the homography and prints aggregates only: agreement with the
-ATD ball, how many ATD gaps it fills, temporal consistency, speed, video/ATD offset. Go criteria
-in `docs/PLAN.md` (B3). Separate venv: `pip install ultralytics==8.4.190 opencv-python==5.0.0.93
-pandas` (plus a CUDA build of torch on a GPU machine).
+`scripts/ball_detector_pilot.py` runs a COCO-pretrained YOLO on a slice of the tactical video and
+prints aggregates only. On two 3,000-frame slices its top detection was within 2 m of the ATD ball
+on only 53–59 % of frames, so its gap fills cannot be trusted (`docs/PLAN.md`, B3).
 
 ## Open items
 
-- Team OK on decisions D005–D009 (`docs/DECISIONS.md`).
+- Fran regenerates v6 on his machine and gets the same SHA-256 as above (`docs/PLAN.md`, R1)
+  before the file is submitted.
+- Team OK on decisions D005–D010 (`docs/DECISIONS.md`).
 - The other pipelines: check their full-match D share (aggregate); compliance of public-window
   calibration with the 23 Oct rules (head-to-head note).
 - Sync the 23 Oct upstream rules (PLAN U1); `AGENTS.md` still says to tune on the public 5 minutes.

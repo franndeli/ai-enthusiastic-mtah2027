@@ -1,17 +1,20 @@
 """Regenerate the submission from the match data: `python run.py --out evaluation/results/<name>.csv`.
 
 Reads the tactical ATD (and the Smart Tagging kick-offs) from MTAH_DATA_DIR, applies the logistic
-coefficients in config/possession_v5.json (default; fitted on public data about other games only:
-Metrica's sample games and the Sportec Open DFL matches; `--model config/possession_v4.json` or
-`possession_v3.json` gives the earlier versions), decodes H/A/D with switching costs, writes
-`frame,label` (X outside the graded halves), runs the official validator on that exact file and
-prints aggregates only. Deterministic: no randomness, no training.
+coefficients in config/possession_v6.json (default; fitted on public data about other games only:
+Metrica's sample games and the Sportec Open DFL matches), decodes H/A/D with switching costs, adds
+PathCRF's ball-free team evidence inside the alive stretches and decodes again (v6; needs
+requirements-v6.txt), writes `frame,label` (X outside the graded halves), runs the official
+validator on that exact file and prints aggregates only. `--model config/possession_v5.json` (no
+PathCRF, numpy and pandas only), `possession_v4.json` or `possession_v3.json` gives the earlier
+versions. Deterministic: no randomness, no training.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import platform
@@ -29,8 +32,14 @@ from .reference import OFFICIAL, baseline_labels
 from .tracking import read_epts
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL = os.path.join(HERE, "..", "config", "possession_v5.json")
+DEFAULT_MODEL = os.path.join(HERE, "..", "config", "possession_v6.json")
 PRIVATE_ROOT = os.path.join(os.path.expanduser("~"), ".mtah2027")
+V6_PACKAGES = ("torch", "torch_geometric", "scipy", "tqdm", "matplotlib")   # requirements-v6.txt
+
+
+def missing_packages(names) -> list:
+    """The names that are not installed, checked without importing them."""
+    return [name for name in names if importlib.util.find_spec(name) is None]
 
 
 def game_constants(game: str):
@@ -96,6 +105,17 @@ def main(argv=None) -> int:
     parser.add_argument("--no-tags", action="store_true", help="ignore the Smart Tagging file")
     args = parser.parse_args(argv)
 
+    model = None if args.baseline is not None else Model.from_json(args.model)
+    if model is not None and model.p.get("pathcrf"):
+        absent = missing_packages(V6_PACKAGES)
+        if absent:
+            print("%s needs PathCRF's packages, not installed here: %s. Install them with\n"
+                  "  pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu\n"
+                  "  pip install -r requirements-v6.txt\n"
+                  "or run v5 instead: --model config/possession_v5.json"
+                  % (os.path.basename(args.model), ", ".join(absent)))
+            return 2
+
     games, n_frames, fps, pitch, blocks = game_constants(args.game)
     paths = games.asset_paths(args.game, data_dir=args.data)
     missing = [k for k in ("atd_meta", "atd_raw") if not os.path.isfile(paths[k])]
@@ -123,7 +143,6 @@ def main(argv=None) -> int:
         labels = baseline_labels(trk, args.baseline, x_outside=False)
         config["mode"] = "official baseline, window %d" % args.baseline
     else:
-        model = Model.from_json(args.model)
         cfg = model.p.get("decode", {"cost_dead": 40.0, "cost_team": 8.0})
         feats = F.compute(trk)
         dead, team = model.dead_logit(feats), model.team_logit(feats)
@@ -140,8 +159,9 @@ def main(argv=None) -> int:
             labels = segment(dead, team + float(pcrf["weight"]) * logodds, blocks, trk.n,
                              cost_dead=cfg["cost_dead"], cost_team=cfg["cost_team"], fps=fps)
             config["pathcrf"] = dict(pcrf, **info)
-            print("  PathCRF covered %.1f%% of the alive frames in %.0f s"
-                  % (100 * info["coverage_of_alive"], info["seconds"]), flush=True)
+            print("  PathCRF covered %.1f%% of the alive frames in %.0f s (torch %s)"
+                  % (100 * info["coverage_of_alive"], info["seconds"],
+                     sys.modules["torch"].__version__), flush=True)
         tags_path = paths.get("smart_tagging")
         if not args.no_tags and tags_path and os.path.isfile(tags_path):
             # Before each half's tagged kick-off window the ball is dead (the 2nd half is graded
@@ -171,6 +191,11 @@ def main(argv=None) -> int:
                 "config": config, "stats": summary,
                 "python": platform.python_version(), "numpy": np.__version__,
                 "pandas": __import__("pandas").__version__}
+    if "pathcrf" in config:
+        # Versions that matter when another machine has to regenerate the same SHA-256.
+        from importlib import metadata
+        manifest.update({name: metadata.version(name) for name in ("torch", "torch_geometric",
+                                                                  "scipy")})
     work = os.environ.get("MTAH_WORK_DIR", os.path.join(PRIVATE_ROOT, "work"))
     os.makedirs(work, exist_ok=True)
     manifest_path = os.path.join(work, os.path.splitext(os.path.basename(args.out))[0]
