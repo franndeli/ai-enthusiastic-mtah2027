@@ -8,6 +8,9 @@ Short version for the team. Details and every number: `docs/research/` (v3, v4, 
 - For each of the 199,319 frames of the tactical video we output `H`, `A` or `D` (and `X` outside
   the graded halves), from the automatic tracking only.
 - The current version is **v5**. It is the default of `run.py`.
+- **v6** (v5 + PathCRF, a published model that infers possession from the players' movement
+  without the ball) is ready and validated on public data (+0.04 spellF1); it becomes the default
+  after the local check on the match (`docs/research/v6-pathcrf.md`).
 - We **never tune on the public 5 minutes**. We test on **30 full matches from other teams** that do
   have labels, with their tracking made as bad as ours.
 - On the DFL matches v5 scores **0.60 spellF1, against 0.25 for the official baseline**
@@ -17,9 +20,14 @@ Short version for the team. Details and every number: `docs/research/` (v3, v4, 
 
 ```sh
 python run.py --out evaluation/results/v5.csv                                        # v5 (default)
+python run.py --out evaluation/results/v6.csv --model config/possession_v6.json      # v6 (+ PathCRF)
 python run.py --out evaluation/results/v4.csv --model config/possession_v4.json      # older versions
-python -m unittest discover -s possession -p "test_*.py"                             # 18 tests
+python -m unittest discover -s possession -p "test_*.py"                             # 21 tests
 ```
+
+- v6 needs CPU-only PyTorch and four small packages, pinned:
+  `pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu` then
+  `pip install -r requirements-v6.txt`. It adds a few minutes on CPU and is deterministic.
 
 - The match data is read from `~/.mtah2027/data/tactical/` (or set `MTAH_DATA_DIR` to the folder
   that contains `tactical/`).
@@ -78,8 +86,11 @@ python -m unittest discover -s possession -p "test_*.py"                        
 | v3 | Viterbi decoder, learned dead ball, touch and team-shape evidence | 0.580 | 0.303 | 220 / 61 % (too much dead ball) |
 | v4 | dead-ball evidence that does not depend on the tracker's noise; trained on many noise models | 0.589 | 0.341 | 223 / 50 % |
 | **v5** | v4 also trained on the 7 DFL matches | **0.598** | **0.351** | 221 / 52 % |
+| v6 (pending local check) | v5 + PathCRF ball-free team evidence | +0.044 on 2 DFL matches held out by PathCRF (Metrica: +0.037) | not applicable (broadcast tracking: −0.02) | pending |
 
 - v4 fixed the main problem of v3 on our match: it was calling 61 % of the match dead ball.
+- v6 only helps when nearly all players are tracked with smooth positions; our match's tracking
+  report (20.5 objects per frame, jitter 0.0014 m) says it is, unlike SkillCorner's broadcast data.
 - v5 vs v4: +0.009 on DFL and +0.011 on SkillCorner (both significant); −0.012 on Metrica, whose
   labels count every touch as a possession, unlike the challenge's definition.
 

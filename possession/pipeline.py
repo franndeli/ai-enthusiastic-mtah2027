@@ -126,9 +126,22 @@ def main(argv=None) -> int:
         model = Model.from_json(args.model)
         cfg = model.p.get("decode", {"cost_dead": 40.0, "cost_team": 8.0})
         feats = F.compute(trk)
-        labels = segment(model.dead_logit(feats), model.team_logit(feats), blocks, trk.n,
+        dead, team = model.dead_logit(feats), model.team_logit(feats)
+        labels = segment(dead, team, blocks, trk.n,
                          cost_dead=cfg["cost_dead"], cost_team=cfg["cost_team"], fps=fps)
         config.update({"mode": "model", "model": os.path.basename(args.model), "decode": cfg})
+        pcrf = model.p.get("pathcrf")
+        if pcrf:
+            # v6: ball-free team evidence from PathCRF inside the stretches decoded as alive,
+            # then the same decode again (possession/pathcrf.py).
+            from . import pathcrf
+            print("running PathCRF (CPU, a few minutes) ...", flush=True)
+            logodds, info = pathcrf.team_evidence(trk, labels, pcrf)
+            labels = segment(dead, team + float(pcrf["weight"]) * logodds, blocks, trk.n,
+                             cost_dead=cfg["cost_dead"], cost_team=cfg["cost_team"], fps=fps)
+            config["pathcrf"] = dict(pcrf, **info)
+            print("  PathCRF covered %.1f%% of the alive frames in %.0f s"
+                  % (100 * info["coverage_of_alive"], info["seconds"]), flush=True)
         tags_path = paths.get("smart_tagging")
         if not args.no_tags and tags_path and os.path.isfile(tags_path):
             # Before each half's tagged kick-off window the ball is dead (the 2nd half is graded
