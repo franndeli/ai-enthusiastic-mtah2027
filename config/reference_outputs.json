@@ -1,0 +1,11 @@
+{
+ "about": "SHA-256 of run.py's output on the challenge match, for the cross-machine check (scripts/check_v6.py). Aggregates only.",
+ "BAR-ATH": {
+  "possession_v6.json": {
+   "sha256": "c961f5f214912857933721c1661874499825e3b43ad91eade3f4f509d3fae120",
+   "possessions": 247,
+   "share_D": 0.515,
+   "reference_machine": "Ángel, 2026-10-30, two runs: Windows, Python 3.11.9, numpy 2.4.6, pandas 3.0.6, torch 2.14.1+cpu, torch_geometric 2.8.1, scipy 1.17.1"
+  }
+ }
+}

@@ -1,6 +1,6 @@
 # Our possession pipeline — what we built and how to use it
 
-Short version for the team. Details and every number: `docs/research/` (v3, v4, v5 notes),
+Short version for the team. Details and every number: `docs/research/` (v3 to v6 notes),
 `docs/PLAN.md` and `docs/DECISIONS.md`.
 
 ## In one minute
@@ -9,11 +9,57 @@ Short version for the team. Details and every number: `docs/research/` (v3, v4, 
   the graded halves), from the automatic tracking only.
 - The current version is **v6**, the default of `run.py`: v5 plus PathCRF, a published model that
   infers possession from the players' movement without the ball. +0.04 spellF1 over v5 on public
-  data; it passed the local check on the match on 30 Oct (`docs/research/v6-pathcrf.md`).
+  matches neither model saw; on our match it passed every check we fixed beforehand (30 Oct,
+  `docs/research/v6-pathcrf.md`).
 - We **never tune on the public 5 minutes**. We test on **30 full matches from other teams** that do
   have labels, with their tracking made as bad as ours.
 - On the DFL matches v5 scores **0.60 spellF1, against 0.25 for the official baseline**
-  (SkillCorner: 0.35 against 0.23).
+  (SkillCorner: 0.35 against 0.23); v6 adds about +0.04 on top.
+
+## Test it on your machine (about 10 minutes)
+
+You need Python 3.11 and the match data where `run.py` looks for it: `~/.mtah2027/data/tactical/`
+(file names as in `DATA.md`), or pass `--data <folder that contains tactical/>`.
+
+```sh
+git fetch origin
+git checkout feat/possession-pipeline-v5
+git pull
+
+# a fresh environment, so nothing else on your machine changes
+py -3.11 -m venv .venv-v6                # Windows (PowerShell)
+.\.venv-v6\Scripts\Activate.ps1
+python3.11 -m venv .venv-v6              # macOS / Linux
+source .venv-v6/bin/activate
+
+pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements-v6.txt       # every version pinned
+
+python scripts/check_v6.py               # add --data <folder> if needed
+```
+
+`scripts/check_v6.py` checks Python and the pinned versions, runs
+`python run.py --out evaluation/results/v6.csv` (a few minutes on CPU; it prints only aggregates)
+and compares the file's SHA-256 with the reference in `config/reference_outputs.json`. Expected:
+
+```text
+check_v6 PASS
+  sha256       c961f5f214912857933721c1661874499825e3b43ad91eade3f4f509d3fae120
+  reference    c961f5f2... (Ángel, 2026-10-30, two runs: Windows, Python 3.11.9, ...)
+  output       247 possessions, D 51.5 % (reference 247, 51.5 %)
+```
+
+PASS means your machine regenerates the submission byte for byte, which the rules require.
+
+**If the check fails**
+
+- *packages missing / different*: install exactly as above, in a fresh venv.
+- *match data not found*: pass `--data <folder that contains tactical/>`.
+- *FAIL with another SHA-256*: paste the report it prints (OS and versions included) in the team
+  chat. Even when possessions and dead-ball share match, a different file has to be fixed before
+  submitting, because the organisers must regenerate the same one.
+- PowerShell refuses to activate the venv:
+  `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force`, then activate again.
 
 ## Run it
 
@@ -21,21 +67,47 @@ Short version for the team. Details and every number: `docs/research/` (v3, v4, 
 python run.py --out evaluation/results/v6.csv                                        # v6 (default)
 python run.py --out evaluation/results/v5.csv --model config/possession_v5.json      # v5, no PyTorch
 python run.py --out evaluation/results/v4.csv --model config/possession_v4.json      # older versions
-python -m unittest discover -s possession -p "test_*.py"                             # 24 tests
+python evaluation/run_evaluation.py               # public 5 minutes: a sanity check, not a score
 ```
 
-- Install (Python 3.11; every version pinned, the same that produced the reference output):
-  `pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu` then
-  `pip install -r requirements-v6.txt`. Without them `run.py` stops at once and says so. v6 adds
-  1–5 minutes on CPU and is deterministic: on the match it gives SHA-256
-  `c961f5f214912857933721c1661874499825e3b43ad91eade3f4f509d3fae120` (Ángel's machine, twice).
-
-- The match data is read from `~/.mtah2027/data/tactical/` (or set `MTAH_DATA_DIR` to the folder
-  that contains `tactical/`).
+- Without the v6 packages `run.py` stops at once and says what to install (or use v5).
 - It prints only aggregates (possessions, % dead ball), runs the official `validate_submission.py`
-  on the exact file and gives the same SHA-256 on every run. No training at run time.
-- Windows (PowerShell): `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force`, then
-  `.\.venv\Scripts\Activate.ps1`.
+  on the exact file and writes a manifest with the versions to `~/.mtah2027/work/`. No training at
+  run time, no randomness: the same SHA-256 on every run.
+
+## Check the claims yourself, on public data (optional)
+
+These use only public matches from other teams, so they also run where the challenge data is not
+available.
+
+| what | command | time | expected |
+|---|---|---|---|
+| unit tests | `python -m unittest discover -s possession -p "test_*.py"` and `... -s scripts ...` | 1 min | 24 + 20 OK |
+| v5 vs v6 in the exact submission path, on DFL J03WR9 laid out like the challenge's files | `python scripts/e2e_public.py <dfl folder>` | ~10 min | spellF1 v5 0.5625 → v6 0.6377, four checks `ok` (below) |
+| the v6 validation table (5 held-out matches × 3 seeds) | `python scripts/validate_v6.py <dfl folder> <metrica sample-data/data>` | ~1.5 h | +0.044 DFL, +0.037 Metrica (`docs/research/v6-pathcrf.md`) |
+
+Expected output of `e2e_public.py` (Linux, 30 Oct). With the same input file, a different
+SHA-256 for v5 or v6 is a reproducibility problem worth reporting:
+
+```text
+input  dfl_J03WR9.npz  sha256 9219c61c22db3d44
+bundle ...bundle_J03WR9_seed10  (ATD sha256 a9503562106164cf)
+
+| run      | spellF1 | macroF1 | possessions (truth 267) | D share | sha256           |
+| v5       | 0.5625  | 0.8478  | 235                     | 43.1 %  | 88c1812ffc96ba9e |
+| v6       | 0.6377  | 0.8586  | 263                     | 43.1 %  | ce12d7bc9cdb03d1 |
+| v6 again | 0.6377  | 0.8586  | 263                     | 43.1 %  | ce12d7bc9cdb03d1 |
+
+  ok    every output valid
+  ok    v6 gives the same SHA-256 twice
+  ok    dead ball identical in v5 and v6
+  ok    v6 above v5 (spellF1)
+```
+
+- DFL data: in a separate venv, `pip install kloppy==3.19.1 numpy==2.4.6 pandas==3.0.6`, then
+  `python scripts/fetch_dfl.py <dfl folder>` (all seven matches, ~2.3 GB downloaded, a few MB
+  kept per match) or add `--matches J03WR9` for the end-to-end check only.
+- Metrica data: `git clone https://github.com/metrica-sports/sample-data` and pass its `data/`.
 
 ## How it works
 
@@ -68,6 +140,8 @@ python -m unittest discover -s possession -p "test_*.py"                        
 - The organisers show it: the official `smooth125` baseline scores 0.4242 there but 0.2242 on the
   full match.
 - The rules (23 Oct) say they are not training data and not a tuning set.
+- We only use them as a sanity check (nothing broken, home and away not swapped): v6 0.7176 / 0.8587
+  macroF1, v5 0.5733 / 0.8492.
 
 ## How we test instead
 
@@ -103,8 +177,9 @@ python -m unittest discover -s possession -p "test_*.py"                        
 ## Tried and dropped
 
 SkillCorner as training data, separate weights while the ball is missing, cheaper team switches at
-touches, Smart Tagging as team evidence (the reliable tags rarely cover the ball gaps). Details in
-`docs/research/v4-robust-dead-ball.md` and `docs/research/v5-dfl.md`.
+touches, Smart Tagging as team evidence (the reliable tags rarely cover the ball gaps), formation
+contrasts and per-match self-training, a ball detector on the video. Details in
+`docs/research/v4-robust-dead-ball.md`, `docs/research/v5-dfl.md` and `docs/PLAN.md` (E8, E9, B3).
 
 ## Rules we follow
 
@@ -117,7 +192,8 @@ touches, Smart Tagging as team evidence (the reliable tags rarely cover the ball
   Kim et al., KDD 2026, doi:10.1145/3770855.3818152).
 - Reproducible: `python scripts/train_model.py <sample-data/data> --version v5 --dfl <dfl folder>`
   regenerates `config/possession_v5.json` byte for byte (checked on Linux; `scripts/fetch_dfl.py`
-  downloads DFL).
+  downloads DFL); `run.py` gives the same file on every run, and `scripts/check_v6.py` checks it
+  across machines.
 
 ## Head-to-head with the other two pipelines (27 Oct)
 
@@ -143,8 +219,8 @@ on only 53–59 % of frames, so its gap fills cannot be trusted (`docs/PLAN.md`,
 
 ## Open items
 
-- Fran regenerates v6 on his machine and gets the same SHA-256 as above (`docs/PLAN.md`, R1)
-  before the file is submitted.
+- Fran runs `python scripts/check_v6.py` on his machine and gets PASS (`docs/PLAN.md`, R1) before
+  the file is submitted.
 - Team OK on decisions D005–D010 (`docs/DECISIONS.md`).
 - The other pipelines: check their full-match D share (aggregate); compliance of public-window
   calibration with the 23 Oct rules (head-to-head note).

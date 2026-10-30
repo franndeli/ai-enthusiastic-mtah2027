@@ -6,6 +6,7 @@
     python run.py --out evaluation/results/<name>.csv --model config/possession_v4.json   # v4
     python run.py --out evaluation/results/<name>.csv --model config/possession_v3.json   # v3
     python run.py --out evaluation/results/check.csv --baseline 50  # official baseline, as a check
+    python scripts/check_v6.py      # runs v6 and compares it with the team's reference (PASS/FAIL)
 """
 
 import sys

@@ -1,3 +1,9 @@
+> **Team branch `feat/possession-pipeline-v5`: our possession pipeline (now v6).**
+> `python run.py --out evaluation/results/v6.csv` writes the submission from the match data.
+> Start with **[PIPELINE.md](PIPELINE.md)**: what it does, how to test it on your machine in about
+> 10 minutes (`python scripts/check_v6.py`), and the evidence behind each version. Everything below
+> this box is the organisers' README, unchanged.
+
 # More than a Hack 2027 — Phase 1: Ball Possession
 
 **Organised by [Metrica Sports](https://metrica-sports.com), [FC Barcelona](https://www.fcbarcelona.com)

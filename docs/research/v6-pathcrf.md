@@ -73,7 +73,8 @@ End to end, in the submission path: DFL J03WR9 written as a challenge bundle (AT
 degradation, seed 10), `run.py` with v5 and with v6: valid files; spellF1 0.563 → 0.638,
 possessions 235 → 263 (truth 267), D 43.1 % in both; v6 twice gives the same SHA-256; PathCRF
 covered 100 % of the alive frames in ~4.5 min on two cores. (The shipped v5 was trained with this
-match, which favours v5.)
+match, which favours v5.) `scripts/e2e_public.py` reruns it: v5 0.5625 / v6 0.6377, SHA-256 v5
+`88c1812ffc96ba9e…`, v6 `ce12d7bc9cdb03d1…` (Linux, PyPI torch 2.14.1 on CPU).
 
 SkillCorner is outside the regime: broadcast tracking with a third of the players missing or
 extrapolated (pc6, pc7), where PathCRF hurts. The match is not like that (tracking report above).
@@ -104,6 +105,19 @@ torch_geometric 2.8.1, scipy 1.17.1 (pinned in `requirements-v6.txt`).
 Still to do: the same SHA-256 on a second machine (Fran's), which is what the organisers will
 check (RULES rule 3); `run.py` records the torch, torch_geometric and scipy versions in its
 manifest to help if it differs.
+
+## Reproduce
+
+| result | command | data |
+|---|---|---|
+| validation table (15 copies, weights 0 / 0.5 / 1) | `python scripts/validate_v6.py <dfl folder> <metrica sample-data/data>` (~1.5 h on 2 cores, resumable) | public: DFL via `scripts/fetch_dfl.py`, Metrica sample data |
+| end to end in the submission path | `python scripts/e2e_public.py <dfl folder>` (~10 min) | public: DFL J03WR9 |
+| local check on the match, on any machine | `python scripts/check_v6.py` (PASS = same SHA-256 as the reference) | the challenge match, local only |
+| tracking regime of the match | `python scripts/tracking_report.py` | the challenge match, local only |
+
+`validate_v6.py` uses the committed modules (`possession/pathcrf.py`, `possession/retrack.py`);
+spot check: J03WR9 seed 10 gives exactly the row above (spellF1 0.5622 / 0.6249 / 0.6429 at
+weights 0 / 0.5 / 1, macroF1 and possession counts identical).
 
 ## Credits and licence
 
