@@ -1,9 +1,12 @@
-# Extra dependencies of v6 (config/possession_v6.json): PathCRF ball-free team evidence
-# (third_party/pathcrf, MPL-2.0). On top of requirements.txt (numpy 2.4.6, pandas 3.0.6).
+# Everything `python run.py` (v6, the default) needs, pinned to the versions that produced the
+# reference output on the match (SHA-256 c961f5f2..., Windows, 30 Oct): Python 3.11.9, numpy 2.4.6,
+# pandas 3.0.6, torch 2.14.1+cpu, torch_geometric 2.8.1, scipy 1.17.1. Use Python 3.11.
 #
-# CPU-only PyTorch, pinned. Install the CPU wheel first so pip does not pull a GPU build:
+# CPU-only PyTorch. Install the CPU wheel first so pip does not pull a GPU build:
 #   pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
 #   pip install -r requirements-v6.txt
+numpy==2.4.6
+pandas==3.0.6
 torch==2.14.1
 torch_geometric==2.8.1
 scipy==1.17.1

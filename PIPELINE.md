@@ -24,9 +24,9 @@ python run.py --out evaluation/results/v4.csv --model config/possession_v4.json 
 python -m unittest discover -s possession -p "test_*.py"                             # 24 tests
 ```
 
-- v6 needs CPU-only PyTorch and four small packages, pinned:
+- Install (Python 3.11; every version pinned, the same that produced the reference output):
   `pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu` then
-  `pip install -r requirements-v6.txt`. Without them `run.py` stops at once and says so. It adds
+  `pip install -r requirements-v6.txt`. Without them `run.py` stops at once and says so. v6 adds
   1–5 minutes on CPU and is deterministic: on the match it gives SHA-256
   `c961f5f214912857933721c1661874499825e3b43ad91eade3f4f509d3fae120` (Ángel's machine, twice).
 
@@ -149,4 +149,4 @@ on only 53–59 % of frames, so its gap fills cannot be trusted (`docs/PLAN.md`,
 - The other pipelines: check their full-match D share (aggregate); compliance of public-window
   calibration with the 23 Oct rules (head-to-head note).
 - Sync the 23 Oct upstream rules (PLAN U1); `AGENTS.md` still says to tune on the public 5 minutes.
-- Pin dependencies (Python 3.11, numpy 2.4.6, pandas 3.0.6) and write the technical document.
+- Write the technical document (dependencies are pinned in `requirements-v6.txt`).

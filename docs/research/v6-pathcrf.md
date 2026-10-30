@@ -93,6 +93,13 @@ Result (30 Oct, Ángel's machine, Windows, CPU torch 2.14.1; aggregates only): a
 | PathCRF coverage of the alive frames | ≥ 85 % | 100.0 % (101 s and 87 s) |
 | D share of graded frames | 51.5 % (v5) | 51.5 % |
 | possessions | 221 < n < ~290 | 247 (+12 %), mean 12.5 s, median 7.8 s |
+| public 5 minutes, sanity only | H/A not inverted (macroF1 ≥ ~0.75) | macroF1 0.8587 (v5 0.8492), spellF1 0.7176 (v5 0.5733), 17 possessions (truth 17); D F1 identical (0.790) |
+
+The public 5 minutes decide nothing (17 possessions; differences below ~0.33 spellF1 are noise and
+the rules say they are not a tuning set); they only confirm that nothing is broken.
+
+Reference environment: Windows, Python 3.11.9, numpy 2.4.6, pandas 3.0.6, torch 2.14.1+cpu,
+torch_geometric 2.8.1, scipy 1.17.1 (pinned in `requirements-v6.txt`).
 
 Still to do: the same SHA-256 on a second machine (Fran's), which is what the organisers will
 check (RULES rule 3); `run.py` records the torch, torch_geometric and scipy versions in its
