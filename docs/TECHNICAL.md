@@ -11,7 +11,8 @@ references:
 
 # Technical document — MTAH 2027 Phase 1, ball possession
 
-Status: 2026-11-03, candidate **v6** = the v5 rules below plus four W6 components (§1b). Every
+Status: 2026-11-03, submitted **v6** = the rules below (all parameters re-selected on external
+data, D016) plus four W6 components (§1b). Every
 number below is produced by a command in this repository; nothing is hand-labelled or
 hand-corrected, and nothing is fitted on the competition match (organisers' clarification of
 2026-10-22, issues #2 and #8): learned parts are trained on external public matches only.
@@ -21,11 +22,14 @@ hand-corrected, and nothing is fitted on the competition match (organisers' clar
 Per frame, the tactical tracking is turned into **log-evidence** for three states — home in
 possession (`H`), away (`A`), dead ball (`D`) — and an offline **Viterbi decoder** picks the most
 probable state sequence of each half under a fixed cost for every state change (16 nats between
-the teams, 8 nats into and out of a stoppage). Frames outside the graded halves are `X`; the graded frames before the
+the teams, 10 nats into and out of a stoppage). Frames outside the graded halves are `X`; the graded frames before the
 second-half kick-off (110,808–113,741) are `D`. Pipeline and signatures: `docs/PIPELINE.md`.
 
 The evidence is two independent log-odds, combined so that team confidence never decides
-alive-versus-dead (`possession/evidence.py`):
+alive-versus-dead (`possession/evidence.py`). The constants quoted in the clue descriptions
+below are the values each clue was designed with; the submitted values were all re-selected on
+external data only by `scripts/tune_rules.py` (D016) and live in `config/possession.json` (for
+example touch radius 1.25 m over 2 frames, touch-now 3 nats, team cap logit(0.85)).
 
 **Team log-odds (home vs away)**, capped at ±logit(0.75) per frame because neighbouring frames
 are not independent votes:
@@ -63,7 +67,9 @@ are not independent votes:
    before this clue: onsets were a median 3.2 s late on IDSSE).
 5. *Ball beyond the lines*: share of the last second with the ball outside the pitch, and
    `ball_exited` — the last visible trajectory projected over a line and the ball not yet back.
-6. *Smart Tagging*: a small constant inside tagged set-piece windows (`w_tag_dead` 0.5). Tags are
+6. *Smart Tagging*: **switched off in the submission** (`w_tag_dead` 0): no external data carries
+   Smart Tagging, so its weight could only have been tuned on the provided game (D016). Designed as
+   a small constant inside tagged set-piece windows. Tags are
    evidence, never labels; their windows are coarse (end ~12 s after the real restart).
 7. *Ball travelling* (`w_moving`, v4): the share of a 1 s window with the ball seen faster than
    5 m/s lowers the dead log-odds; the ball stops before the players do and restarts before
@@ -86,7 +92,7 @@ where the Metrica sample's sits on the player. The noisy judges now use that noi
 (`external.inject_matched_noise`); the old iid 0.3 m ball jitter does not exist on the target.
 On top of the v5 logits, v6 adds:
 
-9. *Fresh-exit onset* (`w_fresh_exit` 1.5): the first 5 s after the ball leaves the pitch, if it
+9. *Fresh-exit onset* (`w_fresh_exit` 2.0): the first 5 s after the ball leaves the pitch, if it
    stays out for 2 s. v5's dead clues stayed flat for 3-5 s after an exit; this clue is 20-150
    times likelier on the first seconds of a stoppage than in play on both external judges.
 10. *Ball-free dead residual* (`possession/dead_residual.py`): a gradient-boosted correction of
@@ -114,7 +120,7 @@ matches (clean and matched noise) and stored in `models/` with their SHA-256 in 
 | Asset | Use |
 |---|---|
 | Tactical ATD (players + ball) | all evidence |
-| Smart Tagging (set pieces) | dead-ball prior inside tagged windows |
+| Smart Tagging (set pieces) | implemented as a dead-ball prior, **off** in the submission: no external tagged data to tune it on (D016) |
 | Tactical homography, both videos | not used (a teammate's YOLO pilot on the tactical video failed its agreement test: top detection within 2 m of the tracked ball on only 53-59 % of frames) |
 | PathCRF pretrained model (Kim et al., KDD 2026, github.com/hyunsungkim-ds/pathcrf, MPL-2.0; trained on five Sportec Open DFL matches) | ball-free team evidence (§1b); evaluated only on matches it never trained on |
 | Broadcast ATD / homography | **dropped** after a measured experiment (W7a): formation-based clock alignment accepted 31 of 253 broadcast runs and recovered 0.5% of the tactical ball gaps; the two balls disagreed by 2.6 m median where both were visible |
@@ -181,17 +187,20 @@ window), so it is used for *relative* decisions, never to set our switching rate
 | v3c, shape weights refit on IDSSE | 0.6000 [0.39, 0.78] | 0.827 | 0.87 / 0.64 | 0.54 / 0.43 | 0.40 / 0.42 / 0.48 | 0.414 / 0.345 | 264, 14.6 s, 39% |
 | v4, last-touch ownership + ball travel | 0.5250 [0.35, 0.70] | 0.811 | 0.95 / 0.60 | 0.49 / 0.40 | 0.34 / 0.42 / 0.40 | 0.508 / 0.397 | 314, 12.7 s, 37% |
 | v5, pass-by filter + touch-now + restart clues | 0.5333 [0.36, 0.69] | 0.823 | — | 0.50 / 0.40 | 0.32 / 0.42 / 0.40 | 0.576 / 0.435 | 305, 12.7 s |
-| **v6, W6 stack (submitted)** | **0.6595 [0.52, 0.78]** | **0.865** | — | §5 stress below | §5 stress below | see below | 310, 41.7 % D |
+| **v6, W6 stack, rules re-tuned externally (submitted)** | **0.6235 [0.46, 0.78]** | **0.830** | — | §5 stress below | §5 stress below | see below | 310, 41.5 % D |
 
 v6 against v5 on the target-matched judges, fresh noise seeds, every learned part trained
-without the evaluated match (nested), on the five matches PathCRF never trained on: Metrica
-clean/noisy +0.027 / +0.077, IDSSE +0.056 / +0.112; 9 of 10 match cells up (Metrica Game_1 clean
--0.0045). Without PathCRF, on all ten matches: +0.029 to +0.047, 20 of 20. The public window was
+without the evaluated match (nested; `scripts/eval_v6_external.py`), on the five matches PathCRF
+never trained on: Metrica clean/noisy 0.605 / 0.495 -> 0.654 / 0.585 (+0.049 / +0.091), IDSSE
+0.592 / 0.469 -> 0.660 / 0.590 (+0.068 / +0.121); 10 of 10 match cells up, smallest +0.036.
+The rule parameters were tuned on the clean and seed 0/1 copies of these same external matches,
+so the clean cells are in-sample for that step; the 3 SkillCorner matches never used anywhere
+give rule stage 0.470 -> 0.498 (weak, phase-derived labels). The public window was
 looked at only after selection (`docs/PLAN.md` W6).
 
 Stress tests on the public window (`scripts/stress_test.py --seeds 5`, robustness checks, not
-selectors), v5 -> v6: transplant (41 % ball missing, 5 seeds) mean 0.493 -> 0.657, min 0.400 ->
-0.595; transition-centred 5 / 10 / 20 s 0.317 / 0.415 / 0.400 -> 0.681 / 0.727 / 0.800. Hiding
+selectors), v5 -> v6: transplant (41 % ball missing, 5 seeds) mean 0.493 -> 0.644, min 0.400 ->
+0.579; transition-centred 5 / 10 / 20 s 0.317 / 0.415 / 0.400 -> 0.678 / 0.752 / 0.813. Hiding
 the ball around hand-overs no longer hurts: PathCRF reads the players, not the ball.
 
 v4 and v5 are also scored on the Metrica sample matches (clean / noisy spellF1): v3c
@@ -253,6 +262,6 @@ scripts/fit_shape_weights.py` (external data, deterministic); they are stored in
 `config/possession.json` so reproduction does not need the download. The v6 models are
 regenerated by `scripts/py scripts/train_v6.py` (external data only, ~18 min, deterministic;
 prints the SHA-256 recorded in the config). v5 stays reproducible with
-`--config config/possession_v5.json`. The same file (sha256 `f11f10374633212f`) is produced on macOS
-arm64 (conda env) and on Linux x86_64 (pip-only `python:3.11.9-slim` container with the same pins,
-CPU torch from the PyTorch index; PathCRF's vendored code also needs matplotlib).
+`--config config/possession_v5.json`. The same file (sha256 `263bfddea0d0eeb7`) is produced on macOS
+arm64 (conda env) and on Linux x86_64 (pip-only `python:3.11.9-slim` container,
+`pip install -r requirements-pipeline.txt`; PathCRF's vendored code also needs matplotlib).

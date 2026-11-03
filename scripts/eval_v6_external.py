@@ -92,7 +92,8 @@ def main() -> int:
             cand = np.full(row.match.n_frames, 3, dtype=np.int8)
             for a, b in blocks:
                 cand[a:b + 1] = verifier.decode_block(model, ev[a:b + 1], row.feats, a, viterbi)
-            base = decode_blocks(evidence.scores(row.feats, v5["evidence"]), blocks, v5, row.feats)
+            base_feats = features.compute(row.match, None, v5.get("features"))
+            base = decode_blocks(evidence.scores(base_feats, v5["evidence"]), blocks, v5, base_feats)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 sb = pm.evaluate(row.codes, base, bootstrap_n=0)

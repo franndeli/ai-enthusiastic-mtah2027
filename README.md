@@ -1,3 +1,62 @@
+# Team ai-enthusiastic — More than a Hack 2027, Phase 1 submission
+
+This repository is our entry: a clone of the organisers' repository (their README follows below,
+unchanged) with our possession pipeline added. It regenerates our submission file from the
+provided data with one command, byte for byte.
+
+## Reproduce the submission
+
+```bash
+scripts/setup-env.sh                      # conda env ./.conda-env, pinned (Python 3.11, CPU PyTorch)
+# put the match bundle in ./data as described in data/README.md, or set MTAH_DATA_DIR
+scripts/py run.py --out evaluation/results/ai-enthusiastic.csv     # ~90 s, laptop CPU, no GPU
+scripts/py evaluation/validate_submission.py evaluation/results/ai-enthusiastic.csv
+```
+
+`scripts/py` runs Python in the project environment and points it at the data and at a work
+directory for caches (`MTAH_DATA_DIR`, `MTAH_WORK_DIR`; defaults under `~/.mtah2027`). The same
+file (SHA-256 prefix `263bfddea0d0eeb7`) is produced on macOS arm64 and on Linux x86_64. Without
+conda: `pip install -r requirements-pipeline.txt` (Python 3.11; CPU PyTorch index included).
+
+## What it does
+
+The technical document is [docs/TECHNICAL.md](docs/TECHNICAL.md) (the submitted PDF is that file
+rendered: `pandoc docs/TECHNICAL.md -s -o tech.html`, then printed to PDF).
+
+Per frame, the automatic tracking is turned into log-evidence for home possession, away
+possession and dead ball, and a Viterbi decoder picks the most probable sequence per half:
+
+- **Rules** (`possession/features.py`, `evidence.py`): who touched the ball last, sustained
+  control, ball-free team shape, players walking, ball beyond the lines or just out, restarts.
+- **PathCRF** (`possession/pathcrf.py`, Kim et al., KDD 2026, pretrained, vendored in
+  `third_party/pathcrf`): infers the ball possessor from the 22 players' movement alone, which is
+  what matters when the ball is not tracked (41 % of graded frames).
+- **Learned corrections** trained on external matches only: a ball-free dead-ball residual
+  (`possession/dead_residual.py`) and a verifier that accepts or rejects alternative decodes spell
+  by spell (`possession/verifier.py`). Models in `models/`, hash-pinned in `config/possession.json`.
+
+Every tunable parameter was selected on external public data (Metrica sample games, IDSSE /
+Sportec Open DFL), never on the provided game, its video or its ground truth: rule parameters by
+`scripts/tune_rules.py`, shape weights by `scripts/fit_shape_weights.py`, learned models by
+`scripts/train_v6.py`. External evaluation with whole-match exclusion:
+`scripts/eval_v6_external.py`. Decisions and their evidence: [docs/DECISIONS.md](docs/DECISIONS.md),
+[docs/PLAN.md](docs/PLAN.md).
+
+## Data, models and licences
+
+| Used | Licence / terms | How |
+|---|---|---|
+| Provided match bundle (tactical ATD, Smart Tagging) | competition terms; **not in this repository** | input only |
+| IDSSE / Sportec Open DFL (Bassek et al., 2025) | CC-BY 4.0 | training and evaluation (`scripts/fetch_idsse.py`) |
+| Metrica Sports sample data (github.com/metrica-sports/sample-data) | public sample data, source acknowledged | training and evaluation (`scripts/fetch_metrica.py`) |
+| PathCRF code and checkpoint (github.com/hyunsungkim-ds/pathcrf) | MPL-2.0, `third_party/pathcrf/LICENSE` | ball-free possessor inference, unmodified |
+
+No hand labels, no human-produced data about the provided game, nothing checked against the video,
+and no match data was ever given to an AI service: AI coding assistants worked on code and public
+material only and saw aggregate scores ([docs/DATA_POLICY.md](docs/DATA_POLICY.md)).
+
+---
+
 # More than a Hack 2027 — Phase 1: Ball Possession
 
 **Organised by [Metrica Sports](https://metrica-sports.com), [FC Barcelona](https://www.fcbarcelona.com)

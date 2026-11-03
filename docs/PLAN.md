@@ -71,6 +71,14 @@ Harness baseline reproduces `scripts/experiment.py` (v5 Metrica 0.6054/0.5696, I
 - **Stress (public window, robustness only), v5 -> v6:** transplant 0.493 -> 0.657 (min 0.400 ->
   0.595); tc5/10/20 0.317/0.415/0.400 -> 0.681/0.727/0.800.
 - **Cross-machine:** Linux x86_64 pip container reproduces sha256 `f11f10374633212f` (3 min).
+- **Rules clarification (D016), same day:** every rule scalar re-selected on external data only
+  (`scripts/tune_rules.py`, objective 0.5377 -> 0.5563; SkillCorner holdout rule stage 0.470 ->
+  0.498, 5/6 halves), Smart Tagging clue 0, learned models retrained. Nested v6 vs v5 (fixed v5
+  baseline features): Metrica +0.049/+0.091, IDSSE +0.068/+0.121, 10/10, min +0.036. Submission
+  sha256 `263bfddea0d0eeb7`, cold/warm and Linux x86_64 (pip, `requirements-pipeline.txt`)
+  identical, validator exit 0. Public sanity 0.6235 [0.46, 0.78] / macro 0.830, 17 possessions;
+  full match 310 possessions, D 41.5 %. Stress: transplant 0.644 (min 0.579), tc5/10/20
+  0.678/0.752/0.813.
 - **Open:** the rule evaluators
   (`experiment.py`, `idsse_eval.py`, `metrica_eval.py`, `sweep.py`) now default to
   `config/possession_v5.json`. RunPod not used (all compute local and modest).

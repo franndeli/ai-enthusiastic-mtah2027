@@ -1,0 +1,14 @@
+# Exact pins of the possession pipeline (run.py) for a pip-only install, Python 3.11.
+# Same versions as environment.yml; checked in a python:3.11.9-slim linux/amd64 container.
+#   pip install -r requirements-pipeline.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+numpy==2.4.6
+pandas==3.0.6
+scipy==1.15.2
+scikit-learn==1.6.1
+pyarrow==19.0.1
+kloppy==3.18.0
+matplotlib==3.11.2
+tqdm==4.70.1
+torch==2.14.1
+torch_geometric==2.8.1
