@@ -1,4 +1,5 @@
-"""Load the match assets into numpy arrays and write submissions. The only module that touches files.
+"""Load the match assets into numpy arrays, write submissions, load the learned models. The only
+production module that touches files, apart from pathcrf.py reading its vendored checkpoint.
 
 Never prints or logs data values: errors name fields, shapes and frame indices only.
 """
@@ -217,3 +218,22 @@ def load_public_gt(game: str = GAME) -> np.ndarray:
     import possession_metrics as pm  # noqa: E402
     path = root / "evaluation" / "gt" / "{}_possession_gt_public.csv".format(game)
     return pm.label_codes(pm.read_label_csv(str(path)))
+
+
+def load_model(path: str | Path, sha256: str):
+    """A pickled model trained on external data (scripts/train_v6.py), checked against the
+    SHA-256 recorded in the config before unpickling."""
+    data = Path(path).read_bytes()
+    if hashlib.sha256(data).hexdigest() != sha256:
+        raise ValueError(f"model file {Path(path).name} does not match its recorded SHA-256")
+    import pickle
+    return pickle.loads(data)
+
+
+def save_model(path: str | Path, model) -> str:
+    """Pickle a model (protocol 5) and return its SHA-256."""
+    import pickle
+    data = pickle.dumps(model, protocol=5)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_bytes(data)
+    return hashlib.sha256(data).hexdigest()

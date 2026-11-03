@@ -31,7 +31,8 @@
     "w_out_player": 1.0,
     "w_slow_far": 1.0,
     "dead_confidence_max": 0.8,
-    "dead_floor": 0.05
+    "dead_floor": 0.05,
+    "w_fresh_exit": 1.5
   },
   "decoder": {
     "min_duration_frames": 1,
@@ -49,5 +50,17 @@
     "ball_moving_m_s": 5.0,
     "touch_passby_dv_m_s": 2.0
   },
-  "_version": "v5 (W3, 2026-10-28): pass-by touch filter, touch-now evidence, restart clues (out-of-pitch player, slow far ball); see docs/PLAN.md W3"
+  "_version": "v6 (W6, 2026-11-03): v5 + ball-free learned dead residual + fresh-exit onset clue + PathCRF team evidence (x0.5) + spell-edit verifier; see docs/PLAN.md W6. v5: config/possession_v5.json",
+  "v6": {
+    "_purpose": "W6 learned components (external data only; scripts/train_v6.py) and PathCRF team evidence",
+    "w_pathcrf": 0.5,
+    "dead_residual": {
+      "path": "models/dead_residual.pkl",
+      "sha256": "34b3d37c6a9496666863f3e28fbafd2bad2faa31c50f544bdcfd38e3145ebd32"
+    },
+    "verifier": {
+      "path": "models/verifier.pkl",
+      "sha256": "ebdadb6116737b4281e2ae38c9a1e6fd8f8785371c679871696ef9434ae1e1c3"
+    }
+  }
 }

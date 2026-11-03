@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the possession pipeline on the Metrica sample matches and score it against event labels.
 
-    scripts/py scripts/metrica_eval.py [--config config/possession.json] [--noise] [--seed 0]
+    scripts/py scripts/metrica_eval.py [--config config/possession_v5.json] [--noise] [--seed 0]
                                        [--semantics] [--bootstrap 1000]
 
 Same judges as scripts/idsse_eval.py (clean and ATD-like noisy tracking), on the provider whose
@@ -84,7 +84,7 @@ def diagnose(ext, codes: np.ndarray) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--config", default=str(ROOT / "config" / "possession.json"))
+    parser.add_argument("--config", default=str(ROOT / "config" / "possession_v5.json"))
     parser.add_argument("--noise", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--games", nargs="*", default=None)

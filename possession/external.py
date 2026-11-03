@@ -319,3 +319,56 @@ def noise_report(clean: Match, noisy: Match, fps: int = 25) -> dict:
         "n_slots": (clean.n_slots, noisy.n_slots),
         "slots_ever_used": int(np.sum(~np.all(np.isnan(noisy.players_xy[..., 0]), axis=0))),
     }
+
+
+def _smooth_noise(n: int, sigma_frames: float, std: float, rng: np.random.RandomState) -> np.ndarray:
+    from scipy.ndimage import gaussian_filter1d
+    white = rng.normal(0.0, 1.0, (n, 2))
+    smooth = gaussian_filter1d(white, sigma_frames, axis=0, mode="nearest")
+    return smooth / max(float(smooth.std()), 1e-9) * std
+
+
+def inject_matched_noise(match: Match, seed: int, share: float, fps: int = 25,
+                         ball_err_m: float = 0.3) -> Match:
+    """Target-matched noise (W6 fingerprint, 2026-11-03). Differs from inject_noise:
+    the target ATD ball is smooth (second difference median 0.9 cm, p90 2.9 cm; iid 0.3 m jitter
+    gives 87 cm), so position error is low-frequency (0.3 m std, ~1 s correlation) plus 0.3 cm
+    iid; and target players drop out (mean 20.5 observed, p5 14 vs 22 externally), modelled as
+    per-track missing runs plus crowd episodes where many players vanish together."""
+    rng = np.random.RandomState(10_000 + seed)
+    n = match.n_frames
+    scale = np.asarray(match.pitch_m, dtype=np.float64)
+    ball_m = match.ball_xy.astype(np.float64) * scale
+    ball_m = ball_m + _smooth_noise(n, fps * 1.0, ball_err_m, rng) + rng.normal(0.0, 0.003, (n, 2))
+    ball = (ball_m / scale).astype(np.float32)
+    ball_speed = speed_m_s(ball_m, fps).astype(np.float32)
+    graded = np.flatnonzero(match.graded_mask())
+    p = NoiseParams(ball_missing_share=share)
+    dropped = graded[dropout_mask(len(graded), share, p.run_median_s * fps,
+                                           p.run_p90_s * fps, rng)]
+    ball[dropped] = np.nan
+    ball_speed[dropped] = np.nan
+    xy, speed, team_of_slot = _fragment(match, p, fps, rng)
+    # player dropout: per-slot missing runs (mean 2 s, ~4 % of time) + crowd episodes
+    # (mean 3 s, ~10 % of time) in which each player is missing with probability 0.35
+    n_slots = xy.shape[1]
+    slot_missing = np.stack([dropout_mask(n, 0.04, 2.0 * fps, 6.0 * fps, rng)
+                             for _ in range(n_slots)], axis=1)
+    crowd = dropout_mask(n, 0.10, 3.0 * fps, 8.0 * fps, rng)
+    # crowd hits persist over the episode rather than flickering per frame
+    episode_id = np.cumsum(np.diff(np.concatenate(([0], crowd.astype(np.int8)))) == 1)
+    keyed = rng.rand(int(episode_id.max()) + 2, n_slots) < 0.35
+    crowd_hit = crowd[:, None] & keyed[episode_id]
+    missing = slot_missing | crowd_hit
+    xy[missing] = np.nan
+    speed[missing] = np.nan
+    return Match(players_xy=xy, players_speed=speed, ball_xy=ball, ball_speed=ball_speed,
+                 team_of_slot=team_of_slot, halves=list(match.halves), pitch_m=match.pitch_m,
+                 source=match.source)
+
+
+# Matched-noise settings of the W6 judges: ball missing share added inside the halves (Metrica is
+# already missing ~37 % natively) and the low-frequency ball error that reproduces the target's
+# nearest-player-to-ball percentiles (Metrica's sample ball sits on the players, IDSSE's does not).
+MATCHED_NOISE = {"metrica": {"share": 0.15, "ball_err_m": 0.75},
+                 "idsse": {"share": 0.41, "ball_err_m": 0.3}}

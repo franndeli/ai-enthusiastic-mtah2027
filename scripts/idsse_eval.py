@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the possession pipeline on the IDSSE matches and score it against their labels.
 
-    scripts/py scripts/idsse_eval.py --config config/possession.json [--noise] [--seed 0]
+    scripts/py scripts/idsse_eval.py --config config/possession_v5.json [--noise] [--seed 0]
                                      [--matches J03WPY ...] [--bootstrap 1000]
 
 features.compute -> evidence.scores -> decoder.decode per half, scored with
@@ -71,7 +71,7 @@ def print_table(title: str, rows: dict[str, dict], bootstrap: int) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--config", default=str(ROOT / "config" / "possession.json"))
+    parser.add_argument("--config", default=str(ROOT / "config" / "possession_v5.json"))
     parser.add_argument("--noise", action="store_true", help="also score the noisy versions")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--matches", nargs="*", default=None)

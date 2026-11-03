@@ -28,7 +28,7 @@ def grid(text: str) -> list[float]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--config', type=Path, default=ROOT / 'config/possession.json')
+    parser.add_argument('--config', type=Path, default=ROOT / 'config/possession_v5.json')
     parser.add_argument('--team-switch', type=grid, default=grid('3,6,12'))
     parser.add_argument('--to-dead', type=grid, default=grid('3,6,12'))
     parser.add_argument('--from-dead', type=grid, default=grid('3,6,12'))

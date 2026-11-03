@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import possession_metrics as pm  # noqa: E402
 from possession import external, metrica  # noqa: E402
 from idsse_eval import predict  # noqa: E402
-from run import DEFAULT_CONFIG, load_config  # noqa: E402
+from run import RULES_CONFIG, load_config  # noqa: E402
 
 
 def parse_variant(text: str) -> tuple[str, dict]:
@@ -117,7 +117,7 @@ def public_row(config) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--config", type=Path, default=RULES_CONFIG)
     parser.add_argument("--variant", action="append", required=True)
     parser.add_argument("--judges", default="metrica,idsse")
     parser.add_argument("--noise", action="store_true")

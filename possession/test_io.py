@@ -83,6 +83,14 @@ class CacheTests(unittest.TestCase):
                         io.load_match()
                     self.assertEqual(parse.call_count, 4)
 
+    def test_model_files_are_hash_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "m.pkl"
+            digest = io.save_model(path, {"a": 1})
+            self.assertEqual(io.load_model(path, digest), {"a": 1})
+            with self.assertRaises(ValueError):
+                io.load_model(path, "0" * 64)
+
     def test_runner_suppresses_original_failure(self):
         error_output = stdio.StringIO()
         with patch('sys.argv', ['run.py', '--out', 'unused.csv']), \

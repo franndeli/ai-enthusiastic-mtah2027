@@ -33,6 +33,8 @@ SHAPE_Z_CLIP = 3.0
 SET_PIECE_CODE = "set pieces"
 RESTART_SIGMA_FRAMES = FPS       # width of the restart bump around the end of a set-piece window
 RESTART_TEAM_AFTER_FRAMES = 4 * FPS  # the team taking a set piece is the likely owner this long after it
+FRESH_EXIT_FRAMES = 5 * FPS      # stoppage onset: the first seconds after the ball left the pitch
+FRESH_EXIT_PERSIST_FRAMES = 2 * FPS  # ... counted only if the ball stays out this long (W6-S)
 
 
 def _dist_m(a_xy: np.ndarray, b_xy: np.ndarray, pitch_m) -> np.ndarray:
@@ -323,6 +325,23 @@ def ball_travel_m(ball_xy: np.ndarray, pitch_m, span: int) -> np.ndarray:
     return out
 
 
+def fresh_exit_features(ball_exited: np.ndarray) -> dict:
+    """fresh_exit: 1 during the first FRESH_EXIT_FRAMES after the ball left the pitch (seen or
+    projected, ball_exited switching on), while it has not been seen back inside, and only for
+    exits that last at least FRESH_EXIT_PERSIST_FRAMES (a ball skimming a line is no stoppage).
+    v5's dead clues stay flat for 3-5 s after a real exit; this clue is 20-150 times likelier on
+    the first seconds of a stoppage than in play on both external judges (W6-S)."""
+    n = len(ball_exited)
+    idx = np.arange(n)
+    exited = np.nan_to_num(ball_exited) > 0.5
+    rise = exited & ~np.concatenate(([False], exited[:-1]))
+    last_rise = np.maximum.accumulate(np.where(rise, idx, -1))
+    next_off = np.minimum.accumulate(np.where(~exited, idx, n)[::-1])[::-1]
+    lasting = (last_rise >= 0) & (next_off[np.maximum(last_rise, 0)] - last_rise >= FRESH_EXIT_PERSIST_FRAMES)
+    fresh = exited & (last_rise >= 0) & (idx - last_rise <= FRESH_EXIT_FRAMES) & lasting
+    return {"fresh_exit": fresh.astype(np.float32)}
+
+
 def restart_features(match: Match, feats: dict) -> dict:
     """Where restarts happen: a standing player beyond the lines (throw-in, retrieving the ball;
     needs no ball), a slow ball at the edge of the pitch, a slow ball nobody is near, and the
@@ -476,6 +495,7 @@ def compute(match: Match, tags: list | None = None, params: dict | None = None) 
     feats.update(gap_features(feats["ball_present"] > 0))
     feats.update(control_features(feats))
     feats.update(ball_exit_features(match.ball_xy))
+    feats.update(fresh_exit_features(feats["ball_exited"]))
     feats.update(ball_motion_features(feats["ball_speed_m_s"],
                                       moving_m_s=p.get("ball_moving_m_s", BALL_MOVING_M_S)))
     feats["ball_out_frac"] = _moving_mean(feats["ball_out"].astype(np.float64),

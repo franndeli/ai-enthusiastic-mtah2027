@@ -19,6 +19,62 @@ Only mark done when acceptance evidence is recorded. Evidence is aggregate only 
 | E3 | done (not adopted) | Learned evidence with domain adaptation | V2 tested fixed <2 s external ownership-label coarsening with team-only learning: reserved IDSSE noisy +0.04772, but target/stress regressions; rejected. See `docs/research/factorized_generalization.md`. |
 | E4 | ready | Technical document polish + team name + public repo push | `docs/TECHNICAL.md` exported as `<team>.pdf`; repo pushed; `git ls-files` audit per DATA_POLICY. |
 
+## W6 — generalizing improvement over v5 (research team), 2026-11-03
+
+Status: done, **v6 adopted** (D015). Protocol, promotion bar and user decisions:
+`docs/tasks/v6-research-wave.md`.
+Coordinator (main session) owns `.orchestration/v6/harness.py`, `BRIEF.md`, target-side aggregate
+checks, integration and docs. Workers are pstack subagents; every prompt repeats rule zero
+(`.orchestration/v6/BRIEF.md`); they use external judges only and never touch the target.
+Harness baseline reproduces `scripts/experiment.py` (v5 Metrica 0.6054/0.5696, IDSSE 0.5761/0.4350).
+
+| Task | Agent | Owned paths | Completion criteria |
+| --- | --- | --- | --- |
+| W6-L learned residual emissions | subagent `learner` | `.orchestration/v6/learner/` | LOMO-trained residual on v5 log-odds, harness report for each recipe, frozen recommendation or none |
+| W6-M spellF1-aware decoding | subagent `decoder` | `.orchestration/v6/decoder/` | Posterior/MBR/duration decoders on v5 evidence, harness reports, frozen recommendation or none |
+| W6-S stoppages and restart rules | subagent `stoppage` | `.orchestration/v6/stoppage/` | Onset evidence and restart-team structure, harness reports, frozen recommendation or none |
+| W6-P PathCRF ball-free possessor evidence (from colleague branch `feat/possession-pipeline-v5`, E10) | subagent `pathcrf` | `.orchestration/v6/pathcrf/` | PathCRF log-odds on v5 team evidence, scored on matches PathCRF never trained on (J03WR9, J03WQQ, Metrica 1-3); experiment env `.conda-env-exp` (torch 2.14.1 CPU, torch_geometric 2.8.1; production unchanged) |
+| W6-F domain fingerprint, W6-V video feasibility, integration | coordinator | `.orchestration/v6/` root, production after gate | Aggregate target-vs-judge statistics; local-only detector recall; gate + public check + reproducibility |
+
+### W6 results (2026-11-03): **v6 adopted** (D015)
+
+- **Fingerprint (coordinator).** Label-free statistics, target vs judges: the target ball is smooth
+  (2nd difference median 0.9 cm; the legacy noisy judge's iid 0.3 m jitter gives 87 cm), players
+  drop out (mean 20.5, p5 14 vs 22), and ball-to-nearest-player distances resemble IDSSE optical
+  tracking, not the Metrica sample (whose ball sits on the players). New target-matched noise
+  (`external.inject_matched_noise`): v5 Metrica noisy 0.570 -> 0.491, IDSSE 0.435 -> 0.454.
+  No per-player speed floor on the target (13.7 % of speeds < 0.5 m/s vs 14-16 %). Target
+  fresh-exit rate 0.89/min (judges 0.79-1.24). v5 under-segments the target (28.8 possessions per
+  10 min vs 34-36 in the public/Metrica truth).
+- **Rejected:** decoder-only MBR/HSMM (M: posterior spell structure uninformative), team
+  residuals (L: remove short spells; R2 fails leave-one-provider-out), restart-team 5-state
+  decoder alone (S: +0.000..+0.003), video ball detection (teammate's B3 pilot no-go; visibility
+  sweep caps the upside at ~+0.02 per 10 points).
+- **Kept components** (each short of the strict gate alone): fresh-exit onset clue (S, post-hoc,
+  confirmed on fresh seeds 17/20), ball-free dead residual X1 (L, LOMO 20/20, LOPO 19/20),
+  spell-edit verifier M2a (M, 19/20, fresh seeds 19/20), PathCRF x0.5 (P, all noisy cells
+  +0.03..+0.08, Metrica clean -0.012).
+- **Finalist stack** (fresh seeds 2/3, PathCRF-unseen matches): Metrica +0.031/+0.079, IDSSE
+  +0.060/+0.111, 10/10; nested leakage-free +0.027/+0.077, +0.056/+0.112, 9/10 (Game_1 clean
+  -0.0045). Without PathCRF, all ten matches: +0.029..+0.047, 20/20. SkillCorner phase-label
+  holdout (coarse weak labels): verifier slightly negative (-0.003..-0.010), exit clue +0.004.
+- **Production:** `run.py` v6 (`config/possession.json`; v5 in `config/possession_v5.json`),
+  models from `scripts/train_v6.py` (external data only, ~18 min, SHA-256 in the config).
+  First port reproduced the research target run exactly. After the review fixes (Smart Tagging
+  kept out of the residual's input, verifier model wrapper; thermos findings M1-M3, L1-L3):
+  cold/warm byte-identical (sha256 `f11f10374633212f`), validator exit 0, public sanity 0.6595
+  [0.52, 0.78], macro 0.8647; full match 310 possessions (29.3 / 10 min), D 41.7 %. ~90 s per
+  run (PathCRF ~80 s on 4 threads).
+- **Shipped evaluator** `scripts/py scripts/eval_v6_external.py` (production code, nested
+  whole-match exclusion, fresh seeds 2/3, 34 min) reproduces the research nested estimate to four
+  decimals on every match: Metrica +0.0277/+0.0771, IDSSE +0.0556/+0.1119, 9/10 cells.
+- **Stress (public window, robustness only), v5 -> v6:** transplant 0.493 -> 0.657 (min 0.400 ->
+  0.595); tc5/10/20 0.317/0.415/0.400 -> 0.681/0.727/0.800.
+- **Cross-machine:** Linux x86_64 pip container reproduces sha256 `f11f10374633212f` (3 min).
+- **Open:** the rule evaluators
+  (`experiment.py`, `idsse_eval.py`, `metrica_eval.py`, `sweep.py`) now default to
+  `config/possession_v5.json`. RunPod not used (all compute local and modest).
+
 ## W3 — touch precision and restart clues (main session), 2026-10-28
 
 Status: done, **v5 adopted** (D014). Single-agent wave after a review of the organisers'
@@ -46,6 +102,80 @@ Full evidence and the rejected ideas: `docs/research/touch_precision.md`.
   jitter-robust ball-motion clue implemented and measured: no public gain, Metrica -0.001/-0.008;
   `w_quiet` kept off. `docs/research/tracked_ball_stoppages.md`; E5 marked blocked.
 
+## BR2 — tracker-robust dead evidence
+
+Status: done (not adopted). User authorizes implementation after BR1, with external generalization as
+acceptance, not public-window optimization. Coordinator owns `possession/robust_dead.py`,
+`scripts/robust_dead_eval.py`, synthetic tests, experiment docs and bounded remote execution.
+Before scores: exactly two activity-head recipes, fixed six-match development / four-match
+confirmation split, multi-tracker scenarios, training/evaluation seed separation and whole-match
+fit exclusion (including shape weights), source-excluded confirmation. Protocol and gates:
+`docs/research/tracker_robust_dead.md`, SPEC BR2. Native public data is not used during development.
+Acceptance: synthetic invariants, aggregate external results for both recipes, explicit rejection
+or frozen-finalist confirmation; production promotion only after all SPEC gates. Preserve v4 and
+the BR1 documentation. No new dependencies or heavy local work; RunPod bound $3 / 3 h, public
+external caches only, automatic cleanup and owned-resource absence verified. No delegates.
+
+Pre-result checkpoint: pure experimental module and external-only evaluator implemented, no
+production wiring. Initial package tests 129/129; two independent evaluator audit tests added
+while the remote job runs bring the total to 131/131 (23 new). Guards 12/12;
+`git diff --check` passes. No experiment code/config changed after launch.
+Source/config fingerprint `1fab2ea6d4597fde2722601b7b1943f36384c54b411ad5baabcca1d32719427b`.
+First managed task `3d878181-0f57-4ffc-9db4-3ce8cb2dc6d3` failed before provisioning
+(`StopIteration`: old GPU SKU absent); independent BR2 resource inventory empty. Launcher-only
+repair picks cheapest available secure instance <=$0.60/h, same $3/3 h bound; experiment
+fingerprint unchanged. Retry `db431222-1f11-44eb-ad40-dcc5dc33f078` also failed before
+provisioning (API request rejected; generic error suppressed detail). Independent BR2 inventory
+empty. Added credential-safe error classification, with a passing synthetic no-secret-echo probe;
+retry only capacity errors across at most three quoted secure choices, reconciling exact resource
+name before another create request. No experiment change. New task
+`6e8b95df-91d4-4836-bd26-f105730ba7ca`, visible terminal
+`term_2e6f14da-ab4c-49bf-b74d-94e1aff98022` provisioned pod `63o49s1hyfi591`, uploaded only
+10 public caches (295,864,460 bytes), installed pinned dependencies and passed remote synthetic
+tests. Evaluation stopped at its pre-training guard: SSH lacked `RUNPOD_POD_ID`. Pod deleted
+(exit 0), independently absent; estimated compute $0.01777. Launcher now passes its API-verified
+pod ID only into SSH commands and checks Linux/cwd/ID before training; experiment unchanged.
+Reserve 113 s and $0.018 of the original budget for that attempt. Current task
+`8d23d0ec-5655-4770-bd43-e9e8f122d523`, terminal
+`term_0f8ad7ab-2902-4446-be13-dd324e2b1e48` completed, exit 0.
+
+**Outcome: reject both recipes at development, retain v4.** Six excluded-match folds / 108 paired
+candidate cases: standard-noise spellF1 0.41577 -> 0.42990 (`replace`, +0.01413) or 0.42767
+(`half`, +0.01190), both below the fixed +0.03 gate. Both improve every standard-noise match and
+both providers, with positive descriptive match intervals; that does not override effect-size
+acceptance. Replacement has large artificial jitter/drift gains, not a substitute for the primary
+judge. No reserved confirmation, provider-excluded confirmation, target scoring or promotion.
+Local aggregate-only recomputation exactly reproduced summaries/exclusions/selection. Full
+condition tables and limitations: `docs/research/tracker_robust_dead.md`. Package tests 131/131,
+guards 12/12, diff check passes; production core/config diff empty. Optional inline production
+regeneration was guard-blocked and stopped, so no fresh cold/warm claim. No commit/push.
+Successful pod `whgc4rac0v7uqf` deleted (exit 0) and independently absent; zero BR2 resources.
+Cumulative estimated compute ~$0.097 including the failed provisioned attempt, not an invoice.
+Experimental module/evaluator/tests retained without production wiring; no third-recipe rescue.
+
+## BR1 — colleague branch review
+
+Status: done (review, not promotion). Coordinator-only review of
+`origin/feat/possession-pipeline-v5` (`7db538a`) and `origin/feat/route-a-possession` (`baf223b`)
+against main (`60d0bfc`), with current upstream rules checked at `f8f2629`.
+Acceptance: trace each approach and its validation claims; run isolated synthetic suites and
+bounded, aggregate-only checks where feasible; document reproducible defects, evidence limits,
+and transferable hypotheses in `docs/research/colleague_branch_review.md`. No merging, model
+selection, target tuning, new dependencies or heavy local training. Production unchanged.
+Source-only snapshots and review probes live in ignored `.orchestration/branch-review/`.
+
+Evidence: branch suites v5 13 / Route A 79, main 108 and guards 12 all pass. Two CLI generations
+per main/v5 byte-identical, official validators exit 0; v5 reader reproduces upstream smooth50
+byte-for-byte. Main/v5 public spellF1 0.52500/0.57333, 10-seed transplant 0.49196/0.47447;
+v5 also regresses on 10/20 s transition masks. Route A final inference not reproduced (required
+model artifact absent; training not run). External tables source-audited, not independently rerun.
+Confirmed: Route A default public-GT calibration conflicts with latest rules; conflicting owner
+tags add false D evidence; v5 coarsens evaluation truth, has seed-dependent bootstrap uncertainty,
+82 non-D frames in the official pre-kickoff D block, and feature/resampling boundary defects.
+Both parsers expose malformed numeric tokens in errors. Report separates these defects from
+useful hypotheses: prioritize v5's tracker-robust dead observations/domain randomisation and
+Route A's paired feature-ablation design. Follow-up experiment is proposed, not adopted. Exact
+commands, aggregate results, synthetic counterexamples and limitations are in the report.
 
 ## W2 — last-touch ownership, provider-matched judge (main session), 2026-10-26
 

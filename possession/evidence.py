@@ -59,6 +59,7 @@ DEFAULT_PARAMS = {
     "w_edge": 0.0,                 # a slow ball within 2 m of a line (restart spot)
     "w_slow_far": 0.0,             # a slow ball seen with nobody within 2.5 m (waiting for a restart)
     "w_quiet": 0.0,                # ... and the players walking: nobody is playing
+    "w_fresh_exit": 0.0,           # first 5 s after the ball left the pitch for >= 2 s (onset)
     "dead_confidence_max": 0.8,    # dead probability clipped to [dead_floor, this]
     "dead_floor": 0.05,
 }
@@ -134,6 +135,8 @@ def dead_logit(features: dict, p: dict) -> np.ndarray:
         z = z + p["w_slow_far"] * _zero_nan(features["ball_slow_far_frac"])
     if p["w_quiet"] and "restart_quiet_frac" in features:
         z = z + p["w_quiet"] * _zero_nan(features["restart_quiet_frac"])
+    if p["w_fresh_exit"] and "fresh_exit" in features:
+        z = z + p["w_fresh_exit"] * features["fresh_exit"]
     return z
 
 
@@ -142,8 +145,13 @@ def scores(features: dict, params: dict | None = None) -> np.ndarray:
     favoured team keeps log(1 - p_dead), the other pays |logit|, so team confidence never decides
     alive-versus-dead (that is the dead logit's job)."""
     p = dict(DEFAULT_PARAMS, **(params or {}))
-    z = team_logit(features, p)
-    p_dead = np.clip(_sigmoid(dead_logit(features, p)), p["dead_floor"], p["dead_confidence_max"])
+    return combine(team_logit(features, p), dead_logit(features, p), p)
+
+
+def combine(z: np.ndarray, z_dead: np.ndarray, params: dict | None = None) -> np.ndarray:
+    """(n, 3) log-evidence from a team logit and a dead logit (see scores)."""
+    p = dict(DEFAULT_PARAMS, **(params or {}))
+    p_dead = np.clip(_sigmoid(z_dead), p["dead_floor"], p["dead_confidence_max"])
     log_alive = np.log(1.0 - p_dead)
 
     out = np.empty((len(z), 3), dtype=np.float32)

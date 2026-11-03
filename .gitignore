@@ -75,3 +75,6 @@ work/
 *.npz
 *.npy
 *.pkl
+# v6 models trained on external data only, hash-pinned in config/possession.json (D005, D015)
+!models/*.pkl
+.conda-env-exp/

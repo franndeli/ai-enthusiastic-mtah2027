@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from evaluation import possession_metrics as pm
 from possession import FPS, X, io
-from run import DEFAULT_CONFIG, label_codes_from_config, load_config, load_tags
+from run import DEFAULT_CONFIG, label_codes_from_config, load_config, load_models, load_tags
 
 
 def missing_runs(match: io.Match) -> list[tuple[int, int]]:
@@ -87,6 +87,7 @@ def run_stress(config: dict, match: io.Match, gt: np.ndarray,
                native_codes: np.ndarray | None = None) -> list[dict]:
     """Recompute the full pipeline on copied ball arrays; return aggregate rows only."""
     tags = load_tags(config)
+    models = load_models(config)
     if seeds < 1:
         raise ValueError("seeds must be positive")
     masks = [("native", [np.zeros(match.n_frames, dtype=bool)])]
@@ -106,7 +107,7 @@ def run_stress(config: dict, match: io.Match, gt: np.ndarray,
                 masked = replace(match, ball_xy=ball_xy, ball_speed=ball_speed)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)
-                    codes = label_codes_from_config(config, masked, tags)
+                    codes = label_codes_from_config(config, masked, tags, models)
             results.append(pm.evaluate(gt, codes, bootstrap_n=0))
             missing.append(float(np.mean((mask | ~np.isfinite(match.ball_xy).all(axis=1))[public])))
         spells = [result["spell_f1_mean"] for result in results]

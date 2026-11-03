@@ -3,7 +3,9 @@
 
     scripts/py run.py --out evaluation/results/<name>.csv [--config config/possession.json]
 
-Deterministic: no randomness anywhere in the pipeline; running twice yields the identical file.
+Deterministic: no randomness anywhere in the pipeline; running twice yields the identical file
+(PathCRF runs on CPU with fixed threads and rounded probabilities; the same file was produced on
+macOS arm64 and Linux x86_64, docs/TECHNICAL.md section 7).
 Prints aggregates only (counts, timings), never frame-level content.
 """
 from __future__ import annotations
@@ -19,9 +21,10 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from possession import LABELS, X, decoder, evidence, features, io, structure  # noqa: E402
+from possession import LABELS, X, decoder, features, io, stack, structure, verifier  # noqa: E402
 
 DEFAULT_CONFIG = ROOT / "config" / "possession.json"
+RULES_CONFIG = ROOT / "config" / "possession_v5.json"   # rule-only v5: default of the rule evaluators
 
 
 def load_config(path: Path) -> dict:
@@ -61,18 +64,48 @@ def decode_blocks(log_evidence: np.ndarray, blocks: list[tuple[int, int]],
     return codes
 
 
-def label_codes_from_config(config: dict, match: io.Match, tags: list | None = None) -> np.ndarray:
-    """Codes for every frame. tags: Smart Tagging intervals (io.load_smart_tagging) or None."""
+def label_codes_from_config(config: dict, match: io.Match, tags: list | None = None,
+                            models: dict | None = None) -> np.ndarray:
+    """Codes for every frame. tags: Smart Tagging intervals (io.load_smart_tagging) or None.
+    models: the config's learned components (load_models(config)); loaded when None."""
     feats = features.compute(match, tags, config.get("features"))
-    log_evidence = evidence.scores(feats, config.get("evidence"))
+    models = load_models(config) if models is None else models
 
-    def decode_block(block_evidence: np.ndarray, start: int) -> np.ndarray:
-        block_feats = None
-        if "restart_prior" in feats:
-            block_feats = {"restart_prior": feats["restart_prior"][start:start + len(block_evidence)]}
-        return decode_blocks(block_evidence, [(0, len(block_evidence) - 1)], config, block_feats)
+    def rule_decode(log_evidence: np.ndarray) -> np.ndarray:
+        def decode_block(block_evidence: np.ndarray, start: int) -> np.ndarray:
+            block_feats = None
+            if "restart_prior" in feats:
+                block_feats = {"restart_prior": feats["restart_prior"][start:start + len(block_evidence)]}
+            return decode_blocks(block_evidence, [(0, len(block_evidence) - 1)], config, block_feats)
+        return structure.decode_halves(log_evidence, decode_block)
 
-    return structure.decode_halves(log_evidence, decode_block)
+    log_evidence = stack.log_evidence(feats, match, config.get("evidence") or {},
+                                      models.get("dead_residual"),
+                                      (config.get("v6") or {}).get("w_pathcrf", 0.0), rule_decode)
+    model = models.get("verifier")
+    if model is None:
+        return rule_decode(log_evidence)
+    viterbi = verifier.viterbi_decode(config["decoder"])
+    return structure.decode_halves(
+        log_evidence, lambda block, start: verifier.decode_block(model, block, feats, start, viterbi))
+
+
+class MissingModel(FileNotFoundError):
+    """A model file named in the config is absent (its message names repository paths only)."""
+
+
+def load_models(config: dict) -> dict:
+    """The learned components named in the config's "v6" section, hash-checked ({} for v5)."""
+    v6 = config.get("v6") or {}
+    models = {}
+    for name in ("dead_residual", "verifier"):
+        if name in v6:
+            path = ROOT / v6[name]["path"]
+            if not path.is_file():
+                raise MissingModel(f"{v6[name]['path']} is missing; regenerate it with "
+                                        "scripts/py scripts/train_v6.py")
+            models[name] = io.load_model(path, v6[name]["sha256"])
+    return models
 
 
 def main() -> int:
@@ -86,14 +119,18 @@ def main() -> int:
     try:
         started = time.time()
         config = load_config(Path(args.config))
+        models = load_models(config)
         match = io.load_match(cache=not args.no_cache)
         print("loaded tracking: {} frames x {} slots in {:.1f}s".format(
             match.n_frames, match.n_slots, time.time() - started))
 
-        codes = label_codes_from_config(config, match, load_tags(config))
+        codes = label_codes_from_config(config, match, load_tags(config), models)
         io.write_submission(args.out, codes)
         counts = {LABELS[k]: int(np.sum(codes == k)) for k in range(4)}
         print("wrote {}  labels {}  in {:.1f}s".format(args.out, counts, time.time() - started))
+    except MissingModel as error:
+        print(f"pipeline failed: {error}", file=sys.stderr)   # names repository files only
+        raise SystemExit(1) from None
     except Exception as error:
         print(f"pipeline failed: {type(error).__name__} "
               "(loading, decoding or writing failed; details suppressed for data safety)",
