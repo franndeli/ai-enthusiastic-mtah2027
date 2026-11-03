@@ -1,3 +1,11 @@
+---
+id: data-policy
+type: architecture-design
+status: draft
+title: Data policy (rule zero)
+parent: goal
+---
+
 # Data policy
 
 ## Why

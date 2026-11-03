@@ -1,3 +1,13 @@
+---
+id: goal
+type: goal-and-requirements
+status: draft
+title: MTAH 2027 Phase 1 — ball possession labelling
+references:
+  - data-policy
+  - decisions
+---
+
 # MTAH 2027 — spec
 
 ## Goal
@@ -42,7 +52,8 @@ Smart Tagging (638 automatic instances), homography per frame.
 
 ## Generalization acceptance gate (OpenAI review wave)
 
-Keep v3c frozen unless a predeclared candidate passes independent coordinator verification.
+Keep the current v4 production model frozen unless a predeclared candidate passes independent
+verification (v4 superseded v3c in D011).
 Choose candidates using external matches only; the public window and its masks are a final
 non-regression check, never a search objective. Split external matches by whole match, refitting
 any learned component without the evaluated match; noise seeds are repeated measurements, not
@@ -53,39 +64,8 @@ macroF1 loss <= 0.01. Require >= 0.03 gains on both target stress families per D
 transplant mean and mean of 5/10/20-second transition-centred masks, with no individual transition
 loss > 0.02 and no native public-window regression. Report all attempted candidates and reject public-only or unstable gains.
 A candidate must also pass synthetic tests, official submission validation, and byte-identical
-regeneration. If evidence is insufficient, retain v3c rather than promise an improvement.
-
-### Substantive learning experiments (V2)
-
-Test factorized learned evidence rather than only local rule changes: player-only dead/alive
-classification (no frozen-ball shortcut), and externally trained ownership with fixed label
-coarsening while keeping rule dead evidence. Every fitting step, including shape weights and
-calibration, must exclude the outer evaluation match. Freeze recipes before results; at most two
-recipes per family, no target-window selection. External event-derived or weak labels must not
-be represented as independent exact frame-level possession truth. Production promotion still
-requires the gates above; isolated experiments may fail without changing deployed predictions.
-
-### Renewed evidence research (V3)
-
-Investigate materially different observation models, not another target-window sweep. Predeclare
-bounded recipes and external splits before measuring outcomes; preserve the existing promotion
-gate. Test physical contact/ball-trajectory inference and source-robust temporal ownership as
-separate experiments. Competition assets remain on the Mac; RunPod may process public external
-data and code only, with aggregate-only logs. Local work is limited to code inspection, synthetic
-tests and lightweight inference; substantial training/evaluation runs on RunPod, with bounded
-spend and explicit resource cleanup. No new dependency without confirmation. Record rejected
-recipes and any inability to establish a credible improvement; never claim the private score.
-
-### Automatic phase evidence (V4)
-
-Test the provided Smart Tagging ownership information as an additional soft observation (correlated
-with tracking), never as training labels or manual corrections on the competition match. External evaluation must derive
-analogous observations from actual public event feeds, not from evaluated possession ground truth;
-freeze semantics, alignment and any observation-noise simulation before scores. Do not equate
-manual external events with automatic target tags: disclose that domain gap and test degraded
-observations. Use the unchanged promotion gate and a single externally selected target finalist.
-If a valid external observation/timebase cannot be established, stop rather than manufacture an
-easy benchmark. No new dependencies; heavy work remains on the bounded RunPod lease.
+regeneration. If evidence is insufficient, retain the current production model rather than promise
+an improvement.
 
 ### Judges after W2 (v4)
 
@@ -96,6 +76,13 @@ is looked at; the public window and its stress masks remain correctness and robu
 (17 possessions, first five minutes). A public decrease must be explained (as in W2: stoppages)
 and recorded with the decision. The earlier +0.03 / no-public-regression gate stays the bar for
 learned components (D006–D010), where the public window is the only target-domain measurement.
+
+## Experiment protocols
+
+Each research wave's predeclared protocol is its own task spec under this goal, with its outcome:
+V2 `task-v2-factorized-learning`, V3 `task-v3-observation-models`, V4
+`task-v4-automatic-phase-evidence`, BR2 `task-br2-tracker-robust-dead` (all in `docs/tasks/`).
+A new wave adds a task spec there; the gates above stay the standing bar.
 
 ## Open questions
 
