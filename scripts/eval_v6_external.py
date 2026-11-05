@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import possession_metrics as pm  # noqa: E402
 from possession import dead_residual, evidence, external, features, metrica, stack, verifier  # noqa: E402
-from run import DEFAULT_CONFIG, RULES_CONFIG, decode_blocks  # noqa: E402
+from run import RULES_CONFIG, V6_CONFIG, decode_blocks  # noqa: E402
 from train_v6 import PATHCRF_UNSEEN, pathcrf_probability  # noqa: E402
 
 
@@ -51,7 +51,7 @@ def main() -> int:
     parser.add_argument("--seeds", type=int, nargs="+", default=[2, 3])
     parser.add_argument("--all-matches", action="store_true")
     args = parser.parse_args()
-    config = json.loads(DEFAULT_CONFIG.read_text())
+    config = json.loads(V6_CONFIG.read_text())
     v5 = json.loads(RULES_CONFIG.read_text())
     w_pathcrf = 0.0 if args.all_matches else config["v6"]["w_pathcrf"]
     sources = [("metrica", g, metrica.load_game(g)) for g in metrica.available_games()]

@@ -14,9 +14,10 @@ scripts/py evaluation/validate_submission.py evaluation/results/ai-enthusiastic.
 ```
 
 `scripts/py` runs Python in the project environment and points it at the data and at a work
-directory for caches (`MTAH_DATA_DIR`, `MTAH_WORK_DIR`; defaults under `~/.mtah2027`). The same
-file (SHA-256 prefix `263bfddea0d0eeb7`) is produced on macOS arm64 and on Linux x86_64. Without
-conda: `pip install -r requirements-pipeline.txt` (Python 3.11; CPU PyTorch index included).
+directory for caches (`MTAH_DATA_DIR`, `MTAH_WORK_DIR`; defaults under `~/.mtah2027`). The file's
+SHA-256 prefix is `74884ca1c6106ddc` on macOS arm64; v7 has not yet been checked on another machine
+(v6, `--config config/possession_v6.json`, gives `263bfddea0d0eeb7` on macOS arm64 and Linux x86_64).
+Without conda: `pip install -r requirements-pipeline.txt` (Python 3.11; CPU PyTorch index included).
 
 ## What it does
 
@@ -32,14 +33,18 @@ possession and dead ball, and a Viterbi decoder picks the most probable sequence
   `third_party/pathcrf`): infers the ball possessor from the 22 players' movement alone, which is
   what matters when the ball is not tracked (41 % of graded frames).
 - **Learned corrections** trained on external matches only: a ball-free dead-ball residual
-  (`possession/dead_residual.py`) and a verifier that accepts or rejects alternative decodes spell
-  by spell (`possession/verifier.py`). Models in `models/`, hash-pinned in `config/possession.json`.
+  (`possession/dead_residual.py`), a hand-over detector that prices each change of team and remembers
+  who has the ball after it (`possession/handover.py`), and a verifier that accepts or rejects
+  alternative decodes spell by spell (`possession/verifier.py`). Models in `models/`, hash-pinned in
+  `config/possession.json`.
 
 Every tunable parameter was selected on external public data (Metrica sample games, IDSSE /
-Sportec Open DFL), never on the provided game, its video or its ground truth: rule parameters by
+Sportec Open DFL), never on the provided game's ground truth or its video: rule parameters by
 `scripts/tune_rules.py`, shape weights by `scripts/fit_shape_weights.py`, learned models by
-`scripts/train_v6.py`. External evaluation with whole-match exclusion:
-`scripts/eval_v6_external.py`. Decisions and their evidence: [docs/DECISIONS.md](docs/DECISIONS.md),
+`scripts/train_v7.py`. One thing comes from the provided game: the noise that makes the external
+matches look like its tracking is set from aggregate, label-free statistics of that tracking
+(`external.MATCHED_NOISE`, `external.TRACKER_NOISE`). External evaluation with whole-match exclusion:
+`scripts/eval_v7_external.py`. Decisions and their evidence: [docs/DECISIONS.md](docs/DECISIONS.md),
 [docs/PLAN.md](docs/PLAN.md).
 
 ## Data, models and licences

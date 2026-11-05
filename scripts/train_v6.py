@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Train the two learned v6 components on external public data only and write them to models/.
 
-    scripts/py scripts/train_v6.py [--config config/possession.json]   (needs torch: PathCRF)
+    scripts/py scripts/train_v6.py [--config config/possession_v6.json]   (needs torch: PathCRF)
 
 Data: the Metrica sample games and the IDSSE matches (scripts/fetch_metrica.py,
 scripts/fetch_idsse.py), each clean and with target-matched noise seeds 0 and 1
@@ -12,7 +12,7 @@ scripts/fetch_idsse.py), each clean and with target-matched noise seeds 0 and 1
    matches PathCRF never trained on (IDSSE J03WR9, J03WQQ and the three Metrica games), with the
    full v6 evidence: each row's dead residual from a model trained without that row's match, and
    PathCRF team evidence inside the v5 alive stretches.
-Prints the SHA-256 of both files for config/possession.json. Deterministic (fixed seeds); PathCRF
+Prints the SHA-256 of both files for config/possession_v6.json. Deterministic (fixed seeds); PathCRF
 probabilities are cached in the work directory.
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from possession import dead_residual, evidence, external, features, io, metrica, stack, verifier  # noqa: E402
-from run import DEFAULT_CONFIG, decode_blocks  # noqa: E402
+from run import V6_CONFIG, decode_blocks  # noqa: E402
 
 SEEDS = (0, 1)
 EXPECTED_ROWS = 10 * (1 + len(SEEDS))
@@ -38,8 +38,9 @@ PATHCRF_UNSEEN = {("idsse", "J03WR9"), ("idsse", "J03WQQ"), ("metrica", "Sample_
                   ("metrica", "Sample_Game_2"), ("metrica", "Sample_Game_3")}
 
 
-def external_rows():
-    """[(provider, match_id, seed or None, Match, codes)] clean + matched-noise copies."""
+def external_rows(tracker_noise: bool = False):
+    """[(provider, match_id, seed or None, Match, codes)] clean + matched-noise copies; with
+    tracker_noise, the noise of the W7 judge (external.inject_tracker_noise)."""
     rows = []
     sources = [("metrica", g, metrica.load_game(g)) for g in metrica.available_games()]
     sources += [("idsse", m, external.load_external(m)) for m in external.available_matches()]
@@ -47,6 +48,9 @@ def external_rows():
         rows.append((provider, mid, None, ext.match, ext.codes))
         noise = external.MATCHED_NOISE[provider]
         for seed in SEEDS:
+            if tracker_noise:
+                rows.append((provider, mid, seed, external.inject_tracker_noise(ext, provider, seed), ext.codes))
+                continue
             rows.append((provider, mid, seed, external.inject_matched_noise(
                 ext.match, seed, noise["share"], ext.fps, noise["ball_err_m"]), ext.codes))
     return rows
@@ -73,7 +77,7 @@ def pathcrf_probability(provider, mid, seed, match, alive):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--config", default=str(DEFAULT_CONFIG))
+    parser.add_argument("--config", default=str(V6_CONFIG))
     args = parser.parse_args()
     config = json.loads(Path(args.config).read_text())
     params = dict(evidence.DEFAULT_PARAMS, **config["evidence"])

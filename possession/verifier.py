@@ -44,16 +44,18 @@ FEATURE_NAMES = (
                                          "touch_ref_ctx", "touch_other_ctx"))
 
 
-def viterbi_decode(decoder_config: dict):
+def viterbi_decode(decoder_config: dict, frame_scale: np.ndarray | None = None):
     """decode_fn(evidence, cost_scale) for the production Viterbi of config["decoder"], every
-    switch cost multiplied by cost_scale."""
+    switch cost multiplied by cost_scale. frame_scale: optional per-frame (n,3,3) multipliers of the
+    block being decoded (the learned hand-over costs), kept fixed across the scaled decodes."""
     options = dict(decoder_config)
     cost = decoder.switch_matrix(**options.pop("switch_cost"))
     if float(options.pop("restart_discount", 0.0)) > 0.0:
         raise ValueError("the verifier does not support decoder.restart_discount")
 
     def decode_fn(emis, scale):
-        return decoder.decode(np.asarray(emis, dtype=np.float64), cost * scale, **options)
+        return decoder.decode(np.asarray(emis, dtype=np.float64), cost * scale,
+                              cost_scale=frame_scale, **options)
     return decode_fn
 
 

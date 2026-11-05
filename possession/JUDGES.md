@@ -22,7 +22,9 @@ their events. Both return a `possession.io.Match` plus H/A/D/X codes, so the pro
 on them unchanged. `external.inject_matched_noise` (W6) is the target-matched noise: smooth
 low-frequency ball error (`MATCHED_NOISE`: Metrica 0.75 m, IDSSE 0.3 m), ball dropout with the
 target's gap statistics and player dropout; the older `inject_noise` (iid 0.3 m jitter) is kept
-for reproducing pre-W6 numbers.
+for reproducing pre-W6 numbers. `external.inject_tracker_noise` (W7, the current judge) adds to it the
+ball low-pass and wobble that reproduce the target's velocity-change and second-difference percentiles
+(`TRACKER_NOISE`, label-free, `docs/tasks/v7-learned-handover.md`); a seed keeps its gaps and tracks.
 Fetching, preparing and scoring are done by `scripts/fetch_*.py`, `idsse_prepare.py`,
 `idsse_eval.py`, `metrica_eval.py` and `experiment.py`, with the official scorer in `evaluation/`.
 These rule evaluators default to the rule-only `config/possession_v5.json`; the v6 learned stack

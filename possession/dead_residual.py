@@ -98,18 +98,19 @@ def residual(model: DeadResidualModel, match: Match, feats: dict, z_dead: np.nda
     return np.clip(r, -RESIDUAL_CLIP, RESIDUAL_CLIP).astype(np.float32)
 
 
-def fit(rows: list[TrainingRow]) -> DeadResidualModel:
+def fit(rows: list[TrainingRow], matrices: list[np.ndarray] | None = None) -> DeadResidualModel:
     """Every match weighs equally inside its provider and each provider weighs half; inside a
-    match, its copies (clean / noise seeds) share the match's weight."""
+    match, its copies (clean / noise seeds) share the match's weight. matrices: optional
+    feature_matrix of each row, for callers that refit many times on the same rows."""
     from sklearn.linear_model import LogisticRegression
     providers = sorted({r.group[0] for r in rows})
     n_groups = {pv: len({r.group for r in rows if r.group[0] == pv}) for pv in providers}
     n_copies = {g: sum(1 for r in rows if r.group == g) for g in {r.group for r in rows}}
     parts = []
-    for r in rows:
+    for k, r in enumerate(rows):
         idx = np.arange(_phase(r.seed), r.match.n_frames, SUBSAMPLE)
         idx = idx[r.match.graded_mask()[idx]]
-        X = feature_matrix(r.match, r.feats, r.z_dead)[idx]
+        X = (feature_matrix(r.match, r.feats, r.z_dead) if matrices is None else matrices[k])[idx]
         c = np.asarray(r.codes)[idx]
         keep = c <= 2
         share = 1.0 / (len(providers) * n_groups[r.group[0]] * n_copies[r.group])

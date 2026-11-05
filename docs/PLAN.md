@@ -1,6 +1,6 @@
 # MTAH 2027 — current execution plan
 
-Updated: 2026-10-28
+Updated: 2026-11-05
 
 Status vocabulary: `ready`, `in progress`, `blocked`, `done`.
 Only mark done when acceptance evidence is recorded. Evidence is aggregate only (DATA_POLICY.md).
@@ -18,6 +18,48 @@ Only mark done when acceptance evidence is recorded. Evidence is aggregate only 
 | E5 | blocked | Dead-ball stretches with a tracked, slow ball | On the public D stretches the ATD keeps reporting a ball moving at walking pace ~3 m from the players (seen 66% vs 10-22% on Metrica dead frames); v5 still misses two of the four. W3 measured the regime (`docs/research/tracked_ball_stoppages.md`): the conjunction clues with no alive false positives (`w_out_player`, `w_slow_far` adopted; `w_quiet`, `w_edge` implemented, off) cover at most a tenth of those frames, the broad "slow ball + walking players" clue is wrong on 3-7% of alive frames on every judge, and Metrica's seen-ball dead frames are label slop. Blocked on a judge that contains the regime (corrected same-provider tracking, or an externally trained video ball detector). |
 | E3 | done (not adopted) | Learned evidence with domain adaptation | V2 tested fixed <2 s external ownership-label coarsening with team-only learning: reserved IDSSE noisy +0.04772, but target/stress regressions; rejected. See `docs/research/factorized_generalization.md`. |
 | E4 | ready | Technical document polish + team name + public repo push | `docs/TECHNICAL.md` exported as `<team>.pdf`; repo pushed; `git ls-files` audit per DATA_POLICY. |
+
+## W7 — learned hand-over costs, tracker-faithful judge (main session), 2026-11-05
+
+Status: done, **v7 adopted** (D017). Protocol, every attempted recipe and the tracker fingerprint:
+`docs/tasks/v7-learned-handover.md`. Single agent; research scratch in `.orchestration/v7/`; only
+aggregates entered the agent's context, and the match bundle was copied from Drive to disk by the user
+and a script that prints names and sizes. The local guard is not installed in this clone.
+
+- **Environment.** Fresh machine: miniforge via Homebrew (user-approved), `scripts/setup-env.sh`. The PyPI
+  wheel of scipy 1.15.2 does not load on macOS 27, so `environment.yml` takes the same version from
+  conda-forge. v6 reproduced sha256 `263bfddea0d0eeb7` with it.
+- **Diagnosis** (`.orchestration/v7/diagnose.py`, v6 evidence): true team 0.91-0.94, true dead frames
+  0.63-0.70, against 0.57-0.65; 190-224 of the 269-290 true team changes are placed.
+- **First recipe, rejected.** Strict evaluation against v6, seeds 4/5, W6 noise: Metrica +0.079/+0.060,
+  IDSSE +0.044/+0.038, 10/10; public 0.5765, 289 full-match possessions.
+- **Fingerprint.** Label-free: the target's ball has no sharp kicks and wobbles; the W6 noise reproduced
+  neither. `external.inject_tracker_noise`; rule scalars re-selected on it, objective 0.4289 -> 0.4593.
+- **Final, strict** (`scripts/py scripts/eval_v7_external.py`, fresh seeds 4/5, v6 refit on the same rows;
+  about 40 minutes once its PathCRF cache is filled):
+
+| Judge | v6 | v7 | spell | macro | possessions |
+|---|---|---|---|---|---|
+| Metrica clean | 0.6552 | 0.7203 | +0.0651 | +0.0107 | 298 -> 327 |
+| Metrica noisy | 0.5434 | 0.5976 | +0.0543 | +0.0077 | 282 -> 298 |
+| IDSSE clean | 0.6515 | 0.6887 | +0.0372 | +0.0051 | 324 -> 348 |
+| IDSSE noisy | 0.5579 | 0.5625 | +0.0046 | +0.0011 | 284 -> 299 |
+
+  9/10 match cells, mean +0.0442, min -0.0033 (J03WR9 noisy). Clean copies were seen during selection.
+- **Target checks, not selectors.** Public 0.6235 [0.46, 0.78] -> 0.6316 [0.48, 0.76], macro 0.8300 ->
+  0.8356, 21 predicted of 17 true. Stress v6 -> v7: transplant 0.644 (min 0.579) -> 0.649 (min 0.571);
+  tc5/10/20 0.678/0.752/0.813 -> 0.660/0.753/0.825. Full match 310 -> 311 possessions, D 41.5 % -> 41.6 %.
+- **Reproduction.** `scripts/py scripts/verify_submission.py --name ai-enthusiastic`: cold/warm identical,
+  sha256 `74884ca1c6106ddc`, validator exit 0, macOS arm64. v6 with its config still gives
+  `263bfddea0d0eeb7`. 174 package and 12 guard tests pass. Retraining with `scripts/train_v7.py` (PathCRF
+  cache warm) reproduced the dead residual byte for byte but not the classifier and the verifier; those
+  retrained models gave the same submission, 0 of 158,857 graded frames different. The cause is presumed
+  to be floating-point order in the parallel training, and was not confirmed. Retraining from a cold PathCRF
+  cache, and Linux (the Docker daemon was not running), were not checked.
+- **Open.** The IDSSE noisy gain is about zero: it is the judge closest to the target in ball-to-player
+  distance, so the private gain may be small. Whether calibrating the noise from tracking statistics sits
+  inside the organisers' rule is an interpretation (D017): ask them if in doubt. The technical document
+  must be exported again as `<team>.pdf`.
 
 ## W6 — generalizing improvement over v5 (research team), 2026-11-03
 

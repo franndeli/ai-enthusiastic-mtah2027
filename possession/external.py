@@ -328,18 +328,40 @@ def _smooth_noise(n: int, sigma_frames: float, std: float, rng: np.random.Random
     return smooth / max(float(smooth.std()), 1e-9) * std
 
 
+def smooth_ball_runs(ball_m: np.ndarray, sigma_frames: float) -> np.ndarray:
+    """Gaussian low-pass of (n, 2) positions over each contiguous seen run; NaN stays NaN."""
+    from scipy.ndimage import gaussian_filter1d
+    out = ball_m.copy()
+    seen = ~np.isnan(ball_m[:, 0])
+    edges = np.diff(np.concatenate(([0], seen.astype(np.int8), [0])))
+    for first, last in zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)):
+        out[first:last] = gaussian_filter1d(ball_m[first:last], sigma_frames, axis=0, mode="nearest")
+    return out
+
+
 def inject_matched_noise(match: Match, seed: int, share: float, fps: int = 25,
-                         ball_err_m: float = 0.3) -> Match:
+                         ball_err_m: float = 0.3, smooth_frames: float = 0.0, wobble_m: float = 0.0,
+                         wobble_frames: float = 5.0) -> Match:
     """Target-matched noise (W6 fingerprint, 2026-11-03). Differs from inject_noise:
     the target ATD ball is smooth (second difference median 0.9 cm, p90 2.9 cm; iid 0.3 m jitter
     gives 87 cm), so position error is low-frequency (0.3 m std, ~1 s correlation) plus 0.3 cm
     iid; and target players drop out (mean 20.5 observed, p5 14 vs 22 externally), modelled as
-    per-track missing runs plus crowd episodes where many players vanish together."""
+    per-track missing runs plus crowd episodes where many players vanish together.
+
+    W7 fingerprint (2026-11-05, label-free): the target has no sharp kicks either (second difference
+    p99 5.9 cm against 32-46 cm; velocity change p99 7.4 m/s against 16-19 m/s) and it wobbles at
+    fractions of a second (velocity change median 1.13 m/s against 0.22-0.28 m/s). smooth_frames
+    low-passes the true ball, as a tracker's filter would; wobble_m adds that mid-frequency error.
+    Both draw from their own stream, so the dropout and the tracks of a seed stay as they were."""
     rng = np.random.RandomState(10_000 + seed)
     n = match.n_frames
     scale = np.asarray(match.pitch_m, dtype=np.float64)
     ball_m = match.ball_xy.astype(np.float64) * scale
+    if smooth_frames:
+        ball_m = smooth_ball_runs(ball_m, smooth_frames)
     ball_m = ball_m + _smooth_noise(n, fps * 1.0, ball_err_m, rng) + rng.normal(0.0, 0.003, (n, 2))
+    if wobble_m:
+        ball_m = ball_m + _smooth_noise(n, wobble_frames, wobble_m, np.random.RandomState(20_000 + seed))
     ball = (ball_m / scale).astype(np.float32)
     ball_speed = speed_m_s(ball_m, fps).astype(np.float32)
     graded = np.flatnonzero(match.graded_mask())
@@ -372,3 +394,12 @@ def inject_matched_noise(match: Match, seed: int, share: float, fps: int = 25,
 # nearest-player-to-ball percentiles (Metrica's sample ball sits on the players, IDSSE's does not).
 MATCHED_NOISE = {"metrica": {"share": 0.15, "ball_err_m": 0.75},
                  "idsse": {"share": 0.41, "ball_err_m": 0.3}}
+# W7: the ball low-pass and wobble that reproduce the target's velocity-change and second-difference
+# percentiles on both judges (label-free; .orchestration/v7 calibration, docs/tasks/v7-learned-handover.md).
+TRACKER_NOISE = {"smooth_frames": 6.0, "wobble_m": 0.2, "wobble_frames": 5.0}
+
+
+def inject_tracker_noise(ext: ExternalMatch, provider: str, seed: int) -> Match:
+    """The W7 judge: matched noise plus the target tracker's ball low-pass and wobble."""
+    noise = MATCHED_NOISE[provider]
+    return inject_matched_noise(ext.match, seed, noise["share"], ext.fps, noise["ball_err_m"], **TRACKER_NOISE)

@@ -16,6 +16,7 @@ references:
 Turn the competition match's tactical tracking and Smart Tagging into the submission file:
 `io.load_match` → `features.compute` → `evidence.scores` → `decoder.decode` per half via
 `structure.decode_halves` → `io.write_submission`, wired by `run.py` from `config/possession.json`.
+v6 and v7 add the learned stages in `stack`, `dead_residual`, `pathcrf`, `handover` and `verifier`.
 Stage signatures are in `architecture`; the method and its rationale are in `technical-doc`.
 
 ## Boundary

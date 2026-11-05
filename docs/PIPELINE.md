@@ -41,8 +41,19 @@ v6 (a `"v6"` section in the config, D015) changes the middle of the path, in `ru
 | PathCRF | `pathcrf.home_probability(match, alive) -> (n,)` inside v5's alive stretches; `pathcrf.logodds(p)` x `v6.w_pathcrf` added to the team logit (torch, CPU) |
 | verifier | `verifier.decode_block(model, block_evidence, features, start, verifier.viterbi_decode(cost)) -> codes`, the `decode_fn` of `structure.decode_halves` |
 
+v7 (a `"v7"` section in the config, D017) prices each team change, in `run.v7_codes`:
+
+| Stage | Signature |
+|---|---|
+| logits | `stack.logits(feats, match, params, dead_model, w_pathcrf, rule_decode, home_probability) -> (z_team, z_dead)` |
+| PathCRF | `pathcrf.outputs(match, alive) -> dict`: last and next possessor, out-of-pitch mass, decoded path |
+| hand-over | `handover.logits(model, match, feats, z_team, z_dead, pcrf, params) -> (to_home, to_away)` |
+| evidence and costs | `run.v7_evidence(...) -> (log_evidence, (n,3,3) cost multipliers)`, shared by serving, training and evaluation |
+| verifier | as v6, on `verifier.viterbi_decode(decoder_config, frame_scale)` |
+
 `run.load_models(config)` reads `models/*.pkl` through `io.load_model`, which checks the SHA-256
-recorded in the config. Models are trained only by `scripts/train_v6.py` on external data.
+recorded in the config. Models are trained only on external data, by `scripts/train_v7.py` (v6's by
+`scripts/train_v6.py`; its config is `config/possession_v6.json`).
 
 Parameters live in `config/possession.json`; experiments change values there and record results in
 `docs/PLAN.md` (public spellF1/macroF1 with `--bootstrap 1000`, possession count and mean
@@ -55,7 +66,7 @@ Cached arrays go to `MTAH_WORK_DIR` (set by `scripts/py`), never into the repo.
 
 | Spec id | Owns | May depend on |
 |---|---|---|
-| `possession-pipeline` | the production path above (`io`, `features`, `evidence`, `decoder`, `structure`, `dead_residual`, `pathcrf` + `retrack`, `verifier`, `run.py`) | upstream `games.py`, vendored `third_party/pathcrf` |
+| `possession-pipeline` | the production path above (`io`, `features`, `evidence`, `decoder`, `structure`, `dead_residual`, `pathcrf` + `retrack`, `handover`, `verifier`, `stack`, `run.py`) | upstream `games.py`, vendored `third_party/pathcrf` |
 | `external-judges` | public external matches as `Match` + labels, noise, and the scripts that score on them | `possession-pipeline`, upstream `evaluation/` scorer |
 | `evidence-experiments` | alternative evidence models kept outside production (`learned`, `robust_dead`, `broadcast`) | `possession-pipeline`, `external-judges` |
 | `data-guard` | optional agent tool-call guard | nothing in the package |

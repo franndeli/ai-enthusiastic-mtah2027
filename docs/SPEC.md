@@ -77,11 +77,19 @@ is looked at; the public window and its stress masks remain correctness and robu
 and recorded with the decision. The earlier +0.03 / no-public-regression gate stays the bar for
 learned components (D006–D010), where the public window is the only target-domain measurement.
 
+### Judge after W7 (v7)
+
+The noisy judges use `external.inject_tracker_noise` (D017). Compare the classifier's and the inputs'
+label-free percentiles on the target and on the noisy judges before trusting a learned component: the
+first W7 recipe passed every external check and was under-confident on the target, and only the tails of
+those distributions showed it.
+
 ## Experiment protocols
 
 Each research wave's predeclared protocol is its own task spec under this goal, with its outcome:
 V2 `task-v2-factorized-learning`, V3 `task-v3-observation-models`, V4
-`task-v4-automatic-phase-evidence`, BR2 `task-br2-tracker-robust-dead` (all in `docs/tasks/`).
+`task-v4-automatic-phase-evidence`, BR2 `task-br2-tracker-robust-dead`, W7 `task-v7-learned-handover`
+(all in `docs/tasks/`).
 A new wave adds a task spec there; the gates above stay the standing bar.
 
 ## Open questions

@@ -85,8 +85,24 @@ def frame_table(players_m, team, ball_m, pitch, blocks, alive, fps) -> pd.DataFr
     return table[period > 0].reset_index(drop=True)
 
 
-def home_probability(match: Match, alive: np.ndarray, fps: int = FPS) -> np.ndarray:
-    """(n,) P(last possessor is home), rounded to DIGITS; NaN where PathCRF gives nothing."""
+def _team_code(names) -> np.ndarray:
+    """+1 home, -1 away, 0 for an out-of-pitch node, per PathCRF node name."""
+    return np.array([1.0 if str(x).startswith("home_") else -1.0 if str(x).startswith("away_") else 0.0
+                     for x in names], dtype=np.float32)
+
+
+def _share(frame: pd.DataFrame, tag: str) -> np.ndarray:
+    cols = [c for c in frame.columns if c.startswith(tag)]
+    return frame[cols].sum(axis=1, min_count=1).to_numpy(dtype=np.float64)
+
+
+def outputs(match: Match, alive: np.ndarray, fps: int = FPS) -> dict:
+    """Everything the checkpoint infers per frame, rounded to DIGITS; NaN where it gives nothing.
+
+    p_home, p_next_home: P(the last / next possessor is home). prev_out, next_out: the mass of the
+    out-of-pitch nodes. src_team, dst_team, edge_loop, dst_out: the CRF-decoded possession path (+1
+    home, -1 away, 0 out of pitch; a self-loop is a player on the ball, a different pair a pass in
+    flight, an out-of-pitch destination the ball leaving)."""
     torch, pcrf_utils, inference, _ = _modules()
     model, args = load_model()
     scale = np.asarray(match.pitch_m, dtype=np.float64)
@@ -103,19 +119,33 @@ def home_probability(match: Match, alive: np.ndarray, fps: int = FPS) -> np.ndar
         table, _ = pcrf_utils.label_phases(table)
         table = pcrf_utils.calculate_running_features(table, fps=fps)
         with torch.no_grad():
-            prev, _, _, _ = inference(model, table, ball_feature=False, use_crf=True,
-                                      evaluate=False, window_seconds=args["window_seconds"],
-                                      fps=fps, sample_freq=int(fps / args["target_fps"]))
-    out = np.full(match.n_frames, np.nan)
+            prev, nxt, path, _ = inference(model, table, ball_feature=False, use_crf=True,
+                                           evaluate=False, window_seconds=args["window_seconds"],
+                                           fps=fps, sample_freq=int(fps / args["target_fps"]))
+    n = match.n_frames
+    out = {k: np.full(n, np.nan) for k in ("p_home", "p_next_home", "prev_out", "next_out", "src_team",
+                                           "dst_team", "edge_loop", "dst_out")}
     if prev is None:
         return out
-    home = [c for c in prev.columns if c.startswith("home_")]
-    away = [c for c in prev.columns if c.startswith("away_")]
-    h = prev[home].sum(axis=1, min_count=1).to_numpy(dtype=np.float64)
-    a = prev[away].sum(axis=1, min_count=1).to_numpy(dtype=np.float64)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        out[prev.index.to_numpy(dtype=int)] = h / (h + a)
-    return np.round(out, DIGITS)
+    index = prev.index.to_numpy(dtype=int)
+    for name, frame, key in (("prev", prev, "p_home"), ("next", nxt, "p_next_home")):
+        h, a = _share(frame, "home_"), _share(frame, "away_")
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out[key][index] = h / (h + a)
+        out[f"{name}_out"][index] = _share(frame, "out_")
+    valid = path["edge_src"].notna() & path["edge_dst"].notna()
+    src, dst = path.loc[valid, "edge_src"].to_numpy(), path.loc[valid, "edge_dst"].to_numpy()
+    frames = path.index[valid].to_numpy(dtype=int)
+    out["src_team"][frames] = _team_code(src)
+    out["dst_team"][frames] = _team_code(dst)
+    out["edge_loop"][frames] = (src == dst).astype(np.float64)
+    out["dst_out"][frames] = np.array([str(x).startswith("out_") for x in dst], dtype=np.float64)
+    return {k: np.round(v, DIGITS) for k, v in out.items()}
+
+
+def home_probability(match: Match, alive: np.ndarray, fps: int = FPS) -> np.ndarray:
+    """(n,) P(last possessor is home), rounded to DIGITS; NaN where PathCRF gives nothing."""
+    return outputs(match, alive, fps)["p_home"]
 
 
 def logodds(p: np.ndarray, clip: float = CLIP) -> np.ndarray:

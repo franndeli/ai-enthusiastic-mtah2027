@@ -18,13 +18,12 @@ from possession import A, H, dead_residual, evidence
 from possession.io import Match
 
 
-def log_evidence(feats: dict, match: Match, params: dict, dead_model=None,
-                 w_pathcrf: float = 0.0, rule_decode: Callable | None = None,
-                 home_probability: Callable | None = None) -> np.ndarray:
-    """rule_decode(log_evidence) -> codes decodes the rule evidence (needed only for PathCRF's
-    alive mask); home_probability(match, alive) defaults to pathcrf.home_probability."""
-    if dead_model is None and not w_pathcrf:
-        return evidence.scores(feats, params)
+def logits(feats: dict, match: Match, params: dict, dead_model=None, w_pathcrf: float = 0.0,
+           rule_decode: Callable | None = None,
+           home_probability: Callable | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """(team logit, dead logit) of the stack. rule_decode(log_evidence) -> codes decodes the rule
+    evidence (needed only for PathCRF's alive mask); home_probability(match, alive) defaults to
+    pathcrf.home_probability."""
     p = dict(evidence.DEFAULT_PARAMS, **params)
     z_team = evidence.team_logit(feats, p)
     z_dead_rule = evidence.dead_logit(feats, dict(p, w_fresh_exit=0.0))
@@ -42,4 +41,14 @@ def log_evidence(feats: dict, match: Match, params: dict, dead_model=None,
         alive = np.isin(rule_decode(evidence.combine(z_team, z_dead_rule, p)), (H, A))
         p_home = (home_probability or pathcrf.home_probability)(match, alive)
         z_team = z_team + w_pathcrf * pathcrf.logodds(p_home)
-    return evidence.combine(z_team, z_dead, p)
+    return z_team, z_dead
+
+
+def log_evidence(feats: dict, match: Match, params: dict, dead_model=None,
+                 w_pathcrf: float = 0.0, rule_decode: Callable | None = None,
+                 home_probability: Callable | None = None) -> np.ndarray:
+    """(n, 3) log-evidence of the v6 stack; see logits."""
+    if dead_model is None and not w_pathcrf:
+        return evidence.scores(feats, params)
+    z_team, z_dead = logits(feats, match, params, dead_model, w_pathcrf, rule_decode, home_probability)
+    return evidence.combine(z_team, z_dead, dict(evidence.DEFAULT_PARAMS, **params))

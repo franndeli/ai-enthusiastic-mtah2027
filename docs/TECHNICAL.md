@@ -11,11 +11,13 @@ references:
 
 # Technical document — MTAH 2027 Phase 1, ball possession
 
-Status: 2026-11-03, submitted **v6** = the rules below (all parameters re-selected on external
-data, D016) plus four W6 components (§1b). Every
+Status: 2026-11-05, submitted **v7** = the rules below (all parameters re-selected on external
+data, D016, D017), the four W6 components (§1b) and the W7 hand-over detector (§1c). Every
 number below is produced by a command in this repository; nothing is hand-labelled or
 hand-corrected, and nothing is fitted on the competition match (organisers' clarification of
-2026-10-22, issues #2 and #8): learned parts are trained on external public matches only.
+2026-10-22, issues #2 and #8): learned parts are trained on external public matches only. The one
+input taken from the competition match is the setting of the noise that makes the external matches
+resemble its tracking: aggregate, label-free statistics of that tracking (§1b, §1c).
 
 ## 1. Approach
 
@@ -28,8 +30,8 @@ second-half kick-off (110,808–113,741) are `D`. Pipeline and signatures: `docs
 The evidence is two independent log-odds, combined so that team confidence never decides
 alive-versus-dead (`possession/evidence.py`). The constants quoted in the clue descriptions
 below are the values each clue was designed with; the submitted values were all re-selected on
-external data only by `scripts/tune_rules.py` (D016) and live in `config/possession.json` (for
-example touch radius 1.25 m over 2 frames, touch-now 3 nats, team cap logit(0.85)).
+external data only by `scripts/tune_rules.py` (D016, D017) and live in `config/possession.json` (for
+example touch radius 2.5 m over 2 frames, touch-now 1 nat, team cap logit(0.85)).
 
 **Team log-odds (home vs away)**, capped at ±logit(0.75) per frame because neighbouring frames
 are not independent votes:
@@ -115,6 +117,29 @@ On top of the v5 logits, v6 adds:
 The two learned models are trained by `scripts/train_v6.py` on the Metrica sample and IDSSE
 matches (clean and matched noise) and stored in `models/` with their SHA-256 in the config.
 
+### 1c. v7 additions (W7, D017)
+
+Diagnosis on the external judges: with the true team the pipeline scores 0.91-0.94, with the true dead
+frames 0.63-0.70, against 0.57-0.65 without either, and it places only 190-224 of 269-290 true team
+changes. A single fixed cost for every change of team cannot tell a real hand-over from a spurious one.
+
+13. *Hand-over detector* (`possession/handover.py`): a gradient-boosted classifier reads a window around
+    each frame and estimates the log-odds `g` that the ball passes to a given team exactly there: ball to
+    player distances and how they change, players near the ball, touch votes before and after, ball motion,
+    the rule logits, and PathCRF's last possessor, next possessor and decoded possession path (v6 read only
+    the first). One model scores both teams on features signed towards the destination team. It sets the
+    cost of that team change at that frame, `clip(6 - 4 g, 1, 40)` nats, and a memory of the last hand-over
+    with `g > -1` adds up to 1.5 nats (fading over 10 s) for its team. Trained on the five matches PathCRF
+    never trained on. The verifier keeps its features and is retrained on these decodes.
+14. *A judge closer to the tracker.* A first recipe passed every external check (+0.04..+0.08, 10/10) and
+    fell on the public window, 0.6235 -> 0.5765, with fewer full-match possessions where every external match
+    had more. Comparing label-free percentiles showed why: the target's ball has no sharp kicks and wobbles at
+    fractions of a second (velocity change p99 7.4 m/s against 16-19 externally, median 1.13 against 0.25),
+    so the classifier was under-confident there and made real hand-overs dearer. The noisy judges now also
+    low-pass the true ball (6 frames) and add 0.2 m of wobble (`external.TRACKER_NOISE`), set from those
+    percentiles; owner changes per 10 minutes, not calibrated, then reach 17-23 against the target's 23. All
+    rule scalars and models were selected and trained again on this judge.
+
 ## 2. Assets used and dropped
 
 | Asset | Use |
@@ -187,7 +212,16 @@ window), so it is used for *relative* decisions, never to set our switching rate
 | v3c, shape weights refit on IDSSE | 0.6000 [0.39, 0.78] | 0.827 | 0.87 / 0.64 | 0.54 / 0.43 | 0.40 / 0.42 / 0.48 | 0.414 / 0.345 | 264, 14.6 s, 39% |
 | v4, last-touch ownership + ball travel | 0.5250 [0.35, 0.70] | 0.811 | 0.95 / 0.60 | 0.49 / 0.40 | 0.34 / 0.42 / 0.40 | 0.508 / 0.397 | 314, 12.7 s, 37% |
 | v5, pass-by filter + touch-now + restart clues | 0.5333 [0.36, 0.69] | 0.823 | — | 0.50 / 0.40 | 0.32 / 0.42 / 0.40 | 0.576 / 0.435 | 305, 12.7 s |
-| **v6, W6 stack, rules re-tuned externally (submitted)** | **0.6235 [0.46, 0.78]** | **0.830** | — | §5 stress below | §5 stress below | see below | 310, 41.5 % D |
+| v6, W6 stack, rules re-tuned externally | 0.6235 [0.46, 0.78] | 0.830 | — | §5 stress below | §5 stress below | see below | 310, 41.5 % D |
+| **v7, hand-over detector, W7 judge (submitted)** | **0.6316 [0.48, 0.76]** | **0.836** | — | §5 stress below | §5 stress below | see below | 311, 41.6 % D |
+
+v7 against v6 on the W7 judges, on the five matches PathCRF never trained on, noise seeds never used for
+selection, every learned part of both refit without the evaluated match at every level
+(`scripts/eval_v7_external.py`): Metrica clean/noisy 0.655 / 0.543 -> 0.720 / 0.598 (+0.065 / +0.054), IDSSE
+0.652 / 0.558 -> 0.689 / 0.563 (+0.037 / +0.005), macroF1 up on all four; 9 of 10 match cells up, smallest
+-0.003 (J03WR9 noisy). The clean copies were seen during selection. On the public window the change is inside
+its interval and is not a selector. Stress, v6 -> v7: transplant 0.644 (min 0.579) -> 0.649 (min 0.571);
+transition-centred 5 / 10 / 20 s 0.678 / 0.752 / 0.813 -> 0.660 / 0.753 / 0.825.
 
 v6 against v5 on the target-matched judges, fresh noise seeds, every learned part trained
 without the evaluated match (nested; `scripts/eval_v6_external.py`), on the five matches PathCRF
@@ -247,21 +281,29 @@ These experiments strengthen the transfer warning; they do not change the produc
 - Public-window numbers have ±0.2 intervals; IDSSE semantics differ from ours in granularity.
 - A learned evidence model trained on IDSSE (`possession/learned.py`) exists but is not in the
   submitted path; it is kept only if it beats the rules on all three judges.
+- v7's gain is uneven: about zero on IDSSE with noise, the judge closest to the target in ball-to-player
+  distance, against +0.05 on Metrica with noise. The private gain over v6 may be small.
+- The classifier depends on how well the noise imitates the tracker. It matches the ball statistics measured
+  so far; a mismatch elsewhere would show as a shift in the classifier's output, as it did once (§1c).
+- The classifier and verifier train on five matches, because only those are unseen by PathCRF.
 
 ## 7. Reproduce
 
     scripts/setup-env.sh                                   # conda env + pinned CPU torch
-    scripts/py run.py --out evaluation/results/<team>.csv  # ~90 s (PathCRF ~80 s on 4 threads)
+    scripts/py run.py --out evaluation/results/<team>.csv  # ~70 s (PathCRF most of it, on 4 threads)
     scripts/py evaluation/validate_submission.py evaluation/results/<team>.csv
 
 Data: unpack the bundle as in `data/README.md` or point `MTAH_DATA_DIR` at it; intermediates go
 to `MTAH_WORK_DIR` (default `~/.mtah2027/work`). The pipeline has no randomness; two runs give
-byte-identical files (`cmp`, checked). The shape-weight constants are regenerated by
+byte-identical files (`cmp`, checked). The same run gives sha256 `74884ca1c6106ddc` on macOS arm64; v7 has
+not been checked on another machine. The shape-weight constants are regenerated by
 `scripts/py scripts/fetch_idsse.py && scripts/py scripts/idsse_prepare.py && scripts/py
 scripts/fit_shape_weights.py` (external data, deterministic); they are stored in
-`config/possession.json` so reproduction does not need the download. The v6 models are
-regenerated by `scripts/py scripts/train_v6.py` (external data only, ~18 min, deterministic;
-prints the SHA-256 recorded in the config). v5 stays reproducible with
-`--config config/possession_v5.json`. The same file (sha256 `263bfddea0d0eeb7`) is produced on macOS
-arm64 (conda env) and on Linux x86_64 (pip-only `python:3.11.9-slim` container,
-`pip install -r requirements-pipeline.txt`; PathCRF's vendored code also needs matplotlib).
+`config/possession.json` so reproduction does not need the download. The v7 models are
+regenerated by `scripts/py scripts/train_v7.py` (external data only, ~5 minutes once its PathCRF
+outputs are cached; ~10 minutes more with 3 processes to fill that cache). The submission comes from the
+models in `models/`, hash-checked against the config. Retraining reproduced the residual exactly but not the
+bytes of the other two; those retrained models gave the identical submission (0 frames different). Their new
+hashes must be written in the config to use them. v6 stays reproducible with
+`--config config/possession_v6.json` (sha256 `263bfddea0d0eeb7`, macOS arm64 and Linux x86_64, models from
+`scripts/train_v6.py`), and v5 with `--config config/possession_v5.json`.

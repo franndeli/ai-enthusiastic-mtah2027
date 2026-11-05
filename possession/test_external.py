@@ -184,5 +184,55 @@ class NoiseTest(unittest.TestCase):
             external.inject_noise(self.clean, seed=1, params=params)
 
 
+class TrackerNoiseTest(unittest.TestCase):
+    """W7 judge: the target tracker's ball low-pass and wobble on top of the matched noise."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.clean = synthetic_match()
+
+    def noisy(self, **extra):
+        return external.inject_matched_noise(self.clean, 3, 0.2, 25, 0.3, **extra)
+
+    def test_smoothing_never_bridges_a_gap(self):
+        ball = np.column_stack([np.arange(100.0), np.zeros(100)])
+        ball[40:60] = np.nan
+        out = external.smooth_ball_runs(ball, 4.0)
+        np.testing.assert_array_equal(np.isnan(out[:, 0]), np.isnan(ball[:, 0]))
+        # the far side of the gap cannot pull the near side: a run's values stay within that run
+        self.assertLessEqual(np.nanmax(out[:40, 0]), 39.0)
+        self.assertGreaterEqual(np.nanmin(out[60:, 0]), 60.0)
+
+    def test_smoothing_removes_kicks(self):
+        speed = np.concatenate([np.full(200, 0.1), np.full(200, -0.5)])     # a sharp change of velocity
+        ball = np.column_stack([np.cumsum(speed), np.zeros(400)])
+        second = lambda b: np.max(np.abs(b[2:, 0] - 2 * b[1:-1, 0] + b[:-2, 0]))
+        self.assertLess(second(external.smooth_ball_runs(ball, 6.0)), 0.2 * second(ball))
+
+    def test_defaults_reproduce_the_matched_noise(self):
+        base = self.noisy()
+        same = self.noisy(smooth_frames=0.0, wobble_m=0.0)
+        np.testing.assert_array_equal(base.ball_xy, same.ball_xy)
+
+    def test_same_dropout_and_tracks_as_the_matched_noise_of_that_seed(self):
+        """The new terms draw from their own stream: a seed keeps its gaps and its player tracks."""
+        base, tracker = self.noisy(), self.noisy(**external.TRACKER_NOISE)
+        np.testing.assert_array_equal(np.isnan(base.ball_xy[:, 0]), np.isnan(tracker.ball_xy[:, 0]))
+        np.testing.assert_array_equal(base.players_xy, tracker.players_xy)
+        np.testing.assert_array_equal(base.players_speed, tracker.players_speed)
+        self.assertFalse(np.array_equal(base.ball_xy, tracker.ball_xy, equal_nan=True))
+
+    def test_deterministic_and_ball_speed_follows_the_new_ball(self):
+        a, b = self.noisy(**external.TRACKER_NOISE), self.noisy(**external.TRACKER_NOISE)
+        np.testing.assert_array_equal(a.ball_xy, b.ball_xy)
+        np.testing.assert_array_equal(np.isnan(a.ball_speed), np.isnan(a.ball_speed) | np.isnan(a.ball_xy[:, 0]))
+
+    def test_provider_helper_uses_its_noise_settings(self):
+        ext = external.ExternalMatch(self.clean, np.zeros(self.clean.n_frames, dtype=np.int8), 25, np.zeros((0, 3)))
+        noise = external.MATCHED_NOISE["idsse"]
+        direct = external.inject_matched_noise(self.clean, 1, noise["share"], 25, noise["ball_err_m"], **external.TRACKER_NOISE)
+        np.testing.assert_array_equal(external.inject_tracker_noise(ext, "idsse", 1).ball_xy, direct.ball_xy)
+
+
 if __name__ == "__main__":
     unittest.main()
