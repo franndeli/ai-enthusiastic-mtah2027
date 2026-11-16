@@ -1,6 +1,6 @@
 # MTAH 2027 — current execution plan
 
-Updated: 2026-10-28
+Updated: 2026-11-10
 
 Status vocabulary: `ready`, `in progress`, `blocked`, `done`.
 Only mark done when acceptance evidence is recorded. Evidence is aggregate only (DATA_POLICY.md).
@@ -17,7 +17,66 @@ Only mark done when acceptance evidence is recorded. Evidence is aggregate only 
 | E6 | done | Touch precision and restart clues (v5) | W3: pass-by touch filter, touch-now evidence, 3-frame touches, out-of-pitch player and slow-far-ball dead clues. Metrica clean/noisy 0.563/0.518 -> 0.605/0.570, IDSSE 0.508/0.397 -> 0.576/0.435, every match and seed up; public 0.525 -> 0.533 [0.36, 0.69], macro 0.823; 305 full-match possessions. `docs/research/touch_precision.md`, D014. |
 | E5 | blocked | Dead-ball stretches with a tracked, slow ball | On the public D stretches the ATD keeps reporting a ball moving at walking pace ~3 m from the players (seen 66% vs 10-22% on Metrica dead frames); v5 still misses two of the four. W3 measured the regime (`docs/research/tracked_ball_stoppages.md`): the conjunction clues with no alive false positives (`w_out_player`, `w_slow_far` adopted; `w_quiet`, `w_edge` implemented, off) cover at most a tenth of those frames, the broad "slow ball + walking players" clue is wrong on 3-7% of alive frames on every judge, and Metrica's seen-ball dead frames are label slop. Blocked on a judge that contains the regime (corrected same-provider tracking, or an externally trained video ball detector). |
 | E3 | done (not adopted) | Learned evidence with domain adaptation | V2 tested fixed <2 s external ownership-label coarsening with team-only learning: reserved IDSSE noisy +0.04772, but target/stress regressions; rejected. See `docs/research/factorized_generalization.md`. |
-| E4 | ready | Technical document polish + team name + public repo push | `docs/TECHNICAL.md` exported as `<team>.pdf`; repo pushed; `git ls-files` audit per DATA_POLICY. |
+| E4 | in progress | Final submission packaging and public repository | Team `ai-enthusiastic` confirmed. Upload the validated CSV, public repository URL and `docs/TECHNICAL.md` renamed `ai-enthusiastic.md` through the emailed Google Form; Markdown is accepted. Verification below; publication pending. |
+
+## Final publication verification
+
+Scope: safe cleanup, preserve research provenance and the frozen v6 algorithm. The owner authorized
+publishing `franndeli/ai-enthusiastic-mtah2027`, including its history. No new dependencies.
+
+- Checked the live official `SUBMISSION.md`: November 17, 2026 deadline, emailed Google Form,
+  three deliverables, PDF or Markdown accepted. Synced `RULES.md`, `FAQ.md`, `SUBMISSION.md`
+  from `upstream/main`; scorer and validator already match upstream.
+- Corrected README packaging instructions, pip-versus-Conda invocation and stale technical claims.
+  Kept third-provider code/tests and research evidence; ignored local environments and scratch stay local.
+- `scripts/py -m unittest discover -s possession -p 'test_*.py'`: 164 passed.
+- `python3 -m unittest discover -s scripts -p 'test_*.py'`: 12 passed.
+- `scripts/py scripts/verify_submission.py --name ai-enthusiastic`: cold 70.5 s, cached 71.8 s,
+  byte-identical SHA-256 prefix `263bfddea0d0eeb7`, official validator exit 0. Public spellF1
+  0.6235 [0.4588, 0.7765], macroF1 0.8300; 17 predicted/public possessions.
+- `scripts/py scripts/fetch_skillcorner.py --check`: all 80 files verified.
+- `scripts/py scripts/skillcorner_audit.py --jobs 1`: all 20 matches loaded; mean ball coverage
+  0.594, event possessions 247, dead/team label agreement 0.907/0.968, matching W7's record.
+- `spec_validate`: valid. `git diff --cached --check`: clean. Deslop review: no code rewrite needed.
+- User-approved local aggregate-only history/index audit: 499 blobs, zero restricted-file,
+  common credential-pattern or >100 MiB findings. This is a bounded safety check, not a guarantee
+  against every possible secret. No restricted blob content was printed.
+- Remaining: final commit/push and public visibility verification; the owner must upload the form.
+  The private full-match score is unknown. No fresh cross-machine run or external training sweep.
+
+## W7 — third-provider generalization (main session), 2026-11-09
+
+Status: done, **v6 retained** (D017). Protocol, candidates and promotion bar: `docs/tasks/v7-third-provider.md`
+(declared before any pipeline score on SkillCorner). Coordinator only, no delegates; scratch in
+`.orchestration/v7/`; external public data only, aggregates only.
+
+Full evidence: `docs/research/third_provider.md`.
+
+- **Judge built:** `scripts/fetch_skillcorner.py` (20 matches, pinned commit, 80 files
+  hash-verified), `possession/skillcorner.py` (event and phase labels; restart-in-flight ownership
+  fixed against the teammate construction), `scripts/skillcorner_audit.py`. Ball seen 59.4 %
+  (target 59.3 %), same gap-length profile as the target, 247 possessions per match.
+- **Diagnostic (Metrica/IDSSE nested):** true dead frames +0.04..+0.08, true team +0.21..+0.29;
+  recall under 2 s 0.14-0.23. Loss is short-possession ownership.
+- **E1, SkillCorner DEV, production v6:** v5 config 0.444 -> v6 0.537 (+0.093 [+0.084, +0.103],
+  10/10; phase labels +0.098). Steps: rules +0.008, exit +0.006, residual +0.034, PathCRF +0.041,
+  verifier +0.004 (5/10). PathCRF weight 0.5 is the DEV optimum (0.25: -0.009, 0.75: -0.005).
+- **C1 `3p` rejected:** DEV two-fold +0.0084 (10/10), but Metrica/IDSSE nested -0.004/-0.006 and
+  -0.011/-0.005 (bar: no mean lower by more than 0.005). No TEST look. C2 empty, C3 not run.
+- **Dead-side scalars on three providers:** dormant clues within +-0.006; `w_exit` 1.5 is
+  +0.025 on SkillCorner at the rule stage but +0.002 with the residual and -0.008 on IDSSE noisy.
+- **TEST, one look, production v6:** +0.104 [+0.095, +0.114], 10/10 (0.424 -> 0.528; phase
+  +0.110, 10/10). TEST is now used.
+- **Target, label-free:** inside ball gaps >= 10 s v6 calls 81-92 % of frames dead (SkillCorner
+  truth 91-93 %, v6 there 57-65 %): the SkillCorner dead-ball shortfall is broadcast-specific.
+- **Follow-up, short possessions:** 28-67 % of missed possessions under 4 s have touch votes for
+  the right team, yet stronger touch-now (4/5/7), a higher team cap, `w_touch` 1.5/2 and team
+  switch cost 12/14/20 are all flat or negative on three providers (best single cell +0.005
+  against -0.004 elsewhere). No change; the D016 scalars are a three-provider optimum.
+- **Checks:** 164 package tests + 12 guard tests OK. Production code, config and models
+  unchanged, so the submission hash `263bfddea0d0eeb7` stands (not regenerated in this wave).
+  All compute local. One slip: `gap_dead_stats.py` first decoded external matches on the
+  target's half frames; fixed before any number was recorded.
 
 ## W6 — generalizing improvement over v5 (research team), 2026-11-03
 

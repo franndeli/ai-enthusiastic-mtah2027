@@ -9,12 +9,13 @@ references:
   - decisions
 ---
 
-# Technical document — MTAH 2027 Phase 1, ball possession
+# ai-enthusiastic — MTAH 2027 Phase 1, ball possession
 
-Status: 2026-11-03, submitted **v6** = the rules below (all parameters re-selected on external
-data, D016) plus four W6 components (§1b). Every
-number below is produced by a command in this repository; nothing is hand-labelled or
-hand-corrected, and nothing is fitted on the competition match (organisers' clarification of
+Final candidate: **v6** = the rules below (all parameters re-selected on external
+data, D016) plus four W6 components (§1b). Results below include historical experiments
+recorded in `docs/PLAN.md` and `docs/research/`; not all exploratory runners are shipped.
+The final output is algorithmic, never hand-corrected, and no production component is fitted
+on the competition match (organisers' clarification of
 2026-10-22, issues #2 and #8): learned parts are trained on external public matches only.
 
 ## 1. Approach
@@ -125,7 +126,17 @@ matches (clean and matched noise) and stored in `models/` with their SHA-256 in 
 | PathCRF pretrained model (Kim et al., KDD 2026, github.com/hyunsungkim-ds/pathcrf, MPL-2.0; trained on five Sportec Open DFL matches) | ball-free team evidence (§1b); evaluated only on matches it never trained on |
 | Broadcast ATD / homography | **dropped** after a measured experiment (W7a): formation-based clock alignment accepted 31 of 253 broadcast runs and recovered 0.5% of the tactical ball gaps; the two balls disagreed by 2.6 m median where both were visible |
 | IDSSE / Sportec Open DFL (Bassek et al. 2025, 7 Bundesliga matches, CC-BY 4.0; `scripts/fetch_idsse.py`) | external labelled data: fitting the four shape weights, and validating every design choice on ~3,000 labelled possessions, clean and with ATD-like noise |
+| SkillCorner open data (20 A-League 2024/25 matches, github.com/SkillCorner/opendata, MIT; `scripts/fetch_skillcorner.py`) | third external judge only (W7): validation of v6 on a provider none of it was built on; not used for training or tuning |
 | Metrica Sports sample data (3 anonymised matches, github.com/metrica-sports/sample-data; `scripts/fetch_metrica.py`) | primary external judge since v4: same provider and formats as the competition data, 25 fps, 0–1 coordinates, ball missing 32–41% natively; possession labels derived from the synchronised events with last-touch semantics (`possession/metrica.py`), ~1,000 possessions |
+
+Training labels come from the external providers, not from our team's annotations. For the
+seven IDSSE/Sportec matches, `possession/external.py` maps the provider's `BallStatus` and
+`BallPossession` fields to H/A/D. For the three Metrica sample matches, `possession/metrica.py`
+derives team labels from the provider's synchronised events. Both sets train the v6 residual
+and verifier; IDSSE also supplies the shape-weight fit. PathCRF's supplied checkpoint was
+trained by its authors on five Sportec matches. SkillCorner's event/phase-derived labels are
+an external judge only; the attempted retraining described in §5 was rejected. We did not
+create human annotations for any of these datasets.
 
 ## 3. Handling missing and noisy tracking
 
@@ -147,8 +158,10 @@ missing (5 seeds), *transition-centred* hides it for 5/10/20 s around every true
 
 ## 4. Possession rules implemented
 
-- A change of possession needs sustained control by the other team, not a touch; a deflection,
-  a header without control or a loose ball keep the owner (flat evidence + switch cost).
+- A surviving touch vote or sustained control supports a change of team. The pass-by filter
+  rejects apparent touches without a velocity change; the switch cost discourages fragmentation.
+  Loose balls retain the last-touch evidence, which decays during long gaps. The algorithm cannot
+  reliably distinguish every deflection from a controlled touch.
 - Dead ball starts when the players stop (look-ahead) or the ball leaves the pitch, and ends when
   play restarts; the restart team is whoever shows control first. Set-piece ownership is not
   asked for, so no rule assigns it.
@@ -198,6 +211,13 @@ so the clean cells are in-sample for that step; the 3 SkillCorner matches never 
 give rule stage 0.470 -> 0.498 (weak, phase-derived labels). The public window was
 looked at only after selection (`docs/PLAN.md` W6).
 
+Third provider (W7, `docs/research/third_provider.md`): on the 20 SkillCorner open-data matches
+(real broadcast tracking, ball seen on 59 % of frames with the competition match's gap-length
+profile; labels derived from provider events), where nothing in v6 was trained or tuned, v6
+scores 0.537 against 0.444 for the v5 configuration on ten matches and 0.528 against 0.424 on
+ten further matches looked at once (+0.104 [+0.095, +0.114], 10 of 10). Retraining the learned
+parts with SkillCorner added lost up to 0.011 on Metrica/IDSSE and was not adopted.
+
 Stress tests on the public window (`scripts/stress_test.py --seeds 5`, robustness checks, not
 selectors), v5 -> v6: transplant (41 % ball missing, 5 seeds) mean 0.493 -> 0.644, min 0.400 ->
 0.579; transition-centred 5 / 10 / 20 s 0.317 / 0.415 / 0.400 -> 0.678 / 0.752 / 0.813. Hiding
@@ -232,27 +252,29 @@ These experiments strengthen the transfer warning; they do not change the produc
 
 - The ground truth comes from corrected tracking we never see; our dead-ball onset follows the
   players, theirs follows the referee/ball. Four public stoppages are all we could check against.
-- Hand-overs inside long gaps (34.7% of graded frames sit in gaps > 10 s) are placed by shape
-  and memory only; the transition-centred stress tests show spellF1 ~0.4–0.5 there.
+- Hand-overs inside long gaps (34.7% of graded frames sit in gaps > 10 s) rely on shape,
+  memory and PathCRF's player-only evidence. The v6 stress results in §5 are robustness checks,
+  not proof that individual full-match hand-overs are correctly placed.
 - Possessions under 2 s are still mostly missed (external recall ~0.1–0.2 at IoU 0.5); 2–4 s
   ones are found about half the time. 77 % of true hand-overs have a touch vote of the new team
   within a second; the rest are contested balls where no team is unambiguously nearest.
 - The pass-by filter relies on ball velocity; under the synthetic 0.3 m jitter its threshold
   rises with the match's own jitter floor and it is nearly inactive, so its gain is measured
-  on clean external tracking. The automatic tracking's real ball jitter is not known.
-- Stoppages in which the automatic tracking keeps seeing a slow ball with players around it
-  (the public window's long D stretches) are under-detected, and v4 then splits them into short
-  spurious spells; no external data reproduces that regime, so it could not be fixed without
-  tuning on the match.
+  on clean external tracking. Target-matched noise models the measured smooth ball track, but
+  cannot reproduce every tracking error.
+- Stoppages with a tracked slow ball and nearby players remain difficult. SkillCorner now
+  supplies an external judge for this regime, but the W7 candidates did not improve consistently
+  across providers. No target-specific correction was adopted.
 - Public-window numbers have ±0.2 intervals; IDSSE semantics differ from ours in granularity.
-- A learned evidence model trained on IDSSE (`possession/learned.py`) exists but is not in the
-  submitted path; it is kept only if it beats the rules on all three judges.
+- The older IDSSE evidence model (`possession/learned.py`) is retained as a rejected experiment,
+  not used by the final pipeline. The v6 residual and verifier are separate models.
 
 ## 7. Reproduce
 
     scripts/setup-env.sh                                   # conda env + pinned CPU torch
-    scripts/py run.py --out evaluation/results/<team>.csv  # ~90 s (PathCRF ~80 s on 4 threads)
-    scripts/py evaluation/validate_submission.py evaluation/results/<team>.csv
+    scripts/py run.py --out evaluation/results/ai-enthusiastic.csv
+    scripts/py evaluation/validate_submission.py evaluation/results/ai-enthusiastic.csv
+    scripts/py scripts/verify_submission.py --name ai-enthusiastic
 
 Data: unpack the bundle as in `data/README.md` or point `MTAH_DATA_DIR` at it; intermediates go
 to `MTAH_WORK_DIR` (default `~/.mtah2027/work`). The pipeline has no randomness; two runs give
@@ -265,3 +287,10 @@ prints the SHA-256 recorded in the config). v5 stays reproducible with
 `--config config/possession_v5.json`. The same file (sha256 `263bfddea0d0eeb7`) is produced on macOS
 arm64 (conda env) and on Linux x86_64 (pip-only `python:3.11.9-slim` container,
 `pip install -r requirements-pipeline.txt`; PathCRF's vendored code also needs matplotlib).
+With pip, activate that environment, set `MTAH_DATA_DIR` and `MTAH_WORK_DIR`, and run
+`python run.py` and `python evaluation/validate_submission.py` instead of the Conda wrapper.
+
+Final local verification: 164 package tests and 12 guard tests passed; cold and cached runs
+were byte-identical with SHA-256 prefix `263bfddea0d0eeb7`; official validator exit 0.
+Public sanity check: spellF1 0.6235 [0.4588, 0.7765], macroF1 0.8300. The private score is unknown.
+Upload this document as `ai-enthusiastic.md`; the official form accepts Markdown.

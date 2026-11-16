@@ -8,7 +8,7 @@ provided data with one command, byte for byte.
 
 ```bash
 scripts/setup-env.sh                      # conda env ./.conda-env, pinned (Python 3.11, CPU PyTorch)
-# put the match bundle in ./data as described in data/README.md, or set MTAH_DATA_DIR
+# unpack the match bundle outside this repository; set MTAH_DATA_DIR to that directory
 scripts/py run.py --out evaluation/results/ai-enthusiastic.csv     # ~90 s, laptop CPU, no GPU
 scripts/py evaluation/validate_submission.py evaluation/results/ai-enthusiastic.csv
 ```
@@ -16,12 +16,25 @@ scripts/py evaluation/validate_submission.py evaluation/results/ai-enthusiastic.
 `scripts/py` runs Python in the project environment and points it at the data and at a work
 directory for caches (`MTAH_DATA_DIR`, `MTAH_WORK_DIR`; defaults under `~/.mtah2027`). The same
 file (SHA-256 prefix `263bfddea0d0eeb7`) is produced on macOS arm64 and on Linux x86_64. Without
-conda: `pip install -r requirements-pipeline.txt` (Python 3.11; CPU PyTorch index included).
+conda: install `requirements-pipeline.txt` in a Python 3.11 virtual environment (CPU PyTorch
+index included), set `MTAH_DATA_DIR` and `MTAH_WORK_DIR`, and use `python run.py` rather than
+`scripts/py`, which specifically requires the project Conda environment.
+
+## Submit the entry
+
+By **November 17, 2026**, use the Google Form emailed to registered participants. A GitHub push
+alone is not a submission. Enter the registered team name **ai-enthusiastic** and provide:
+
+- The validated `ai-enthusiastic.csv` generated above (keep it out of Git).
+- The public URL: https://github.com/franndeli/ai-enthusiastic-mtah2027.
+- A copy of [docs/TECHNICAL.md](docs/TECHNICAL.md) named `ai-enthusiastic.md`.
+
+Markdown is accepted; no PDF conversion or extra dependency is needed. Before uploading, run
+`scripts/py scripts/verify_submission.py --name ai-enthusiastic`. It regenerates the CSV twice,
+checks byte equality, and validates the exact final file.
+See [the official submission instructions](https://github.com/metrica-sports/more-than-a-hack-2027/blob/main/SUBMISSION.md).
 
 ## What it does
-
-The technical document is [docs/TECHNICAL.md](docs/TECHNICAL.md) (the submitted PDF is that file
-rendered: `pandoc docs/TECHNICAL.md -s -o tech.html`, then printed to PDF).
 
 Per frame, the automatic tracking is turned into log-evidence for home possession, away
 possession and dead ball, and a Viterbi decoder picks the most probable sequence per half:

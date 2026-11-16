@@ -52,8 +52,8 @@ Smart Tagging (638 automatic instances), homography per frame.
 
 ## Generalization acceptance gate (OpenAI review wave)
 
-Keep the current v4 production model frozen unless a predeclared candidate passes independent
-verification (v4 superseded v3c in D011).
+Keep the current v6 production model frozen unless a predeclared candidate passes independent
+verification (D015–D017; the earlier v4 gate below records the research protocol).
 Choose candidates using external matches only; the public window and its masks are a final
 non-regression check, never a search objective. Split external matches by whole match, refitting
 any learned component without the evaluated match; noise seeds are repeated measurements, not
@@ -87,6 +87,7 @@ A new wave adds a task spec there; the gates above stay the standing bar.
 ## Open questions
 
 - Team members (3–5 needed for the Innovation Challenge and Final Pitch eligibility).
-- Name and owner of the public submission repo.
+- Submission repository: `https://github.com/franndeli/ai-enthusiastic-mtah2027`.
+  Team name confirmed as `ai-enthusiastic`; the owner must submit the emailed Google Form.
 - Compute: user authorizes RunPod for substantial CPU/GPU work; no heavy local workloads.
   Use a bounded initial job and record actual resource cost/cleanup.

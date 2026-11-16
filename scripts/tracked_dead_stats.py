@@ -14,7 +14,7 @@ from scipy.ndimage import uniform_filter1d
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from possession import FPS, features, io, metrica  # noqa: E402
+from possession import FPS, features, io, metrica, skillcorner  # noqa: E402
 
 
 def window_mean(x: np.ndarray, seconds: float) -> np.ndarray:
@@ -80,6 +80,9 @@ def main() -> int:
     for game in metrica.available_games():
         ext = metrica.load_game(game)
         report(game, ext.match, ext.codes, ext.match.graded_mask())
+    for mid in skillcorner.available_matches()[:3]:      # real automatic tracking (W7)
+        ext = skillcorner.load_match(mid)
+        report("SkillCorner " + mid, ext.match, ext.codes, ext.match.graded_mask())
     return 0
 
 

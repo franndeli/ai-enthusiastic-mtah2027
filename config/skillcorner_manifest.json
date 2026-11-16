@@ -1,0 +1,727 @@
+{
+ "repository": "https://github.com/SkillCorner/opendata",
+ "commit": "4340d274572876239c154c90bc507a9b3250a656",
+ "licence": "MIT",
+ "files": [
+  {
+   "match": "1874553",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/1874553/1874553_dynamic_events.csv",
+   "lfs": false,
+   "size": 4738858,
+   "algorithm": "sha1",
+   "digest": "eed14775ef167397844c6178efd7944d9b7af317"
+  },
+  {
+   "match": "1874553",
+   "kind": "match.json",
+   "path": "data/matches/1874553/1874553_match.json",
+   "lfs": false,
+   "size": 33730,
+   "algorithm": "sha1",
+   "digest": "51ef142ceba0f85700b376faf1fdbc4e4a728629"
+  },
+  {
+   "match": "1874553",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/1874553/1874553_phases_of_play.csv",
+   "lfs": false,
+   "size": 115978,
+   "algorithm": "sha1",
+   "digest": "a566fbbaf11cf47838cdf36e6d7fe17904b85f59"
+  },
+  {
+   "match": "1874553",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/1874553/1874553_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 90729279,
+   "algorithm": "sha256",
+   "digest": "ea97f58f8eaad925feaeacc6395ec24860dd80027af8a89450276adebd29d265"
+  },
+  {
+   "match": "1886347",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/1886347/1886347_dynamic_events.csv",
+   "lfs": false,
+   "size": 4918599,
+   "algorithm": "sha1",
+   "digest": "2be820a13e2cb00da1868cb84ece20dfa64179d6"
+  },
+  {
+   "match": "1886347",
+   "kind": "match.json",
+   "path": "data/matches/1886347/1886347_match.json",
+   "lfs": false,
+   "size": 27541,
+   "algorithm": "sha1",
+   "digest": "10779035f95d26a30adf8330c351e4cc4d16a513"
+  },
+  {
+   "match": "1886347",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/1886347/1886347_phases_of_play.csv",
+   "lfs": false,
+   "size": 121864,
+   "algorithm": "sha1",
+   "digest": "2a37e6981af6f9b6e1f1878969927cd4234a549d"
+  },
+  {
+   "match": "1886347",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/1886347/1886347_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 89280839,
+   "algorithm": "sha256",
+   "digest": "3577e2803da95390f8b2f85d47829eb55fbbfee6211c94adc65db0dc78e46b41"
+  },
+  {
+   "match": "1899585",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/1899585/1899585_dynamic_events.csv",
+   "lfs": false,
+   "size": 4375032,
+   "algorithm": "sha1",
+   "digest": "4dd13e8daf676d6440db45735dea0b7b80aa67e5"
+  },
+  {
+   "match": "1899585",
+   "kind": "match.json",
+   "path": "data/matches/1899585/1899585_match.json",
+   "lfs": false,
+   "size": 27810,
+   "algorithm": "sha1",
+   "digest": "42ca159d85dc59476bf5278961ccbda6633a3303"
+  },
+  {
+   "match": "1899585",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/1899585/1899585_phases_of_play.csv",
+   "lfs": false,
+   "size": 119735,
+   "algorithm": "sha1",
+   "digest": "c8df923b064575d49179301f93cedf8727106951"
+  },
+  {
+   "match": "1899585",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/1899585/1899585_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 85550410,
+   "algorithm": "sha256",
+   "digest": "90b6289ec2181192d1793ec6240fbbe8225ff0219c7956710c6278c31a661100"
+  },
+  {
+   "match": "1925299",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/1925299/1925299_dynamic_events.csv",
+   "lfs": false,
+   "size": 5043601,
+   "algorithm": "sha1",
+   "digest": "09f226d38a3d9955d38ec32529a24c30c7958d22"
+  },
+  {
+   "match": "1925299",
+   "kind": "match.json",
+   "path": "data/matches/1925299/1925299_match.json",
+   "lfs": false,
+   "size": 28396,
+   "algorithm": "sha1",
+   "digest": "62b69aba5be11f795ccdbcf65c6d07f662832b66"
+  },
+  {
+   "match": "1925299",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/1925299/1925299_phases_of_play.csv",
+   "lfs": false,
+   "size": 131104,
+   "algorithm": "sha1",
+   "digest": "20c06b378f9a7181ab0e02de7c4a37779316386a"
+  },
+  {
+   "match": "1925299",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/1925299/1925299_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 97091519,
+   "algorithm": "sha256",
+   "digest": "48528be40ad82fa3e2b232e1af8d311705f7d6d119925ef199d2b59ea36fd3c9"
+  },
+  {
+   "match": "1927964",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/1927964/1927964_dynamic_events.csv",
+   "lfs": false,
+   "size": 5509112,
+   "algorithm": "sha1",
+   "digest": "61ae1b281a540395512210910ca94d0058359fb8"
+  },
+  {
+   "match": "1927964",
+   "kind": "match.json",
+   "path": "data/matches/1927964/1927964_match.json",
+   "lfs": false,
+   "size": 33400,
+   "algorithm": "sha1",
+   "digest": "e42fb7edbd49c81e087d0d73cc885cc3095d6a20"
+  },
+  {
+   "match": "1927964",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/1927964/1927964_phases_of_play.csv",
+   "lfs": false,
+   "size": 117263,
+   "algorithm": "sha1",
+   "digest": "d1960e21564d61372824bf8a844c68b391e35abb"
+  },
+  {
+   "match": "1927964",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/1927964/1927964_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 91049828,
+   "algorithm": "sha256",
+   "digest": "858c7a756ca3d33017f864775af5999d2c0f364e58ab60ae040c8b9ebab17827"
+  },
+  {
+   "match": "1953632",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/1953632/1953632_dynamic_events.csv",
+   "lfs": false,
+   "size": 4643533,
+   "algorithm": "sha1",
+   "digest": "2eacf92e64a6eee695af9b002880b6767ba31615"
+  },
+  {
+   "match": "1953632",
+   "kind": "match.json",
+   "path": "data/matches/1953632/1953632_match.json",
+   "lfs": false,
+   "size": 27767,
+   "algorithm": "sha1",
+   "digest": "b63200aace34ada146ab615e776d9a022f1a72ad"
+  },
+  {
+   "match": "1953632",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/1953632/1953632_phases_of_play.csv",
+   "lfs": false,
+   "size": 114478,
+   "algorithm": "sha1",
+   "digest": "bd5c07b7010bc00c73cedcef497aaaadf12a6455"
+  },
+  {
+   "match": "1953632",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/1953632/1953632_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 90027965,
+   "algorithm": "sha256",
+   "digest": "1c2014f97c3eff1ce2475203512c9d126930d7599c036105c9ac442d1de1667e"
+  },
+  {
+   "match": "1959846",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/1959846/1959846_dynamic_events.csv",
+   "lfs": false,
+   "size": 4499680,
+   "algorithm": "sha1",
+   "digest": "dbe8ee1dd7c3890782cef8a886fb8b781e32c136"
+  },
+  {
+   "match": "1959846",
+   "kind": "match.json",
+   "path": "data/matches/1959846/1959846_match.json",
+   "lfs": false,
+   "size": 32946,
+   "algorithm": "sha1",
+   "digest": "3513a7cd787f59e3f8027ba17365c17d78878969"
+  },
+  {
+   "match": "1959846",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/1959846/1959846_phases_of_play.csv",
+   "lfs": false,
+   "size": 128571,
+   "algorithm": "sha1",
+   "digest": "9ba4d7dff66a1b73ae9fbc39a899c678e308f5e9"
+  },
+  {
+   "match": "1959846",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/1959846/1959846_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 87710167,
+   "algorithm": "sha256",
+   "digest": "5ba2d87f6fd1ba3138301b369bd9266be69416a2d799a3fba5b5ec8a52e1284b"
+  },
+  {
+   "match": "1986691",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/1986691/1986691_dynamic_events.csv",
+   "lfs": false,
+   "size": 4290910,
+   "algorithm": "sha1",
+   "digest": "cf9f7a30cafb536c67c9f5afc3b176a9d7de066c"
+  },
+  {
+   "match": "1986691",
+   "kind": "match.json",
+   "path": "data/matches/1986691/1986691_match.json",
+   "lfs": false,
+   "size": 33792,
+   "algorithm": "sha1",
+   "digest": "dee942a7a5464f0730aff27b93b5269f5697d88b"
+  },
+  {
+   "match": "1986691",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/1986691/1986691_phases_of_play.csv",
+   "lfs": false,
+   "size": 115267,
+   "algorithm": "sha1",
+   "digest": "ce1b2c410fd4130f0f385520e5c5c6f908a4a933"
+  },
+  {
+   "match": "1986691",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/1986691/1986691_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 88531597,
+   "algorithm": "sha256",
+   "digest": "630e946950fe459f5e48872b01a36e6dfc319cf9027e7b98156150bb6e2c30f6"
+  },
+  {
+   "match": "1996435",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/1996435/1996435_dynamic_events.csv",
+   "lfs": false,
+   "size": 4964532,
+   "algorithm": "sha1",
+   "digest": "72454b398b9301c03fa31aca9ede35e4efa419c7"
+  },
+  {
+   "match": "1996435",
+   "kind": "match.json",
+   "path": "data/matches/1996435/1996435_match.json",
+   "lfs": false,
+   "size": 27830,
+   "algorithm": "sha1",
+   "digest": "4b6aea20c71dd1128228aff2d8a12d848a0109af"
+  },
+  {
+   "match": "1996435",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/1996435/1996435_phases_of_play.csv",
+   "lfs": false,
+   "size": 120335,
+   "algorithm": "sha1",
+   "digest": "4c616f64b0ddf8f8d759a3f70dce22745c033600"
+  },
+  {
+   "match": "1996435",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/1996435/1996435_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 88634016,
+   "algorithm": "sha256",
+   "digest": "f42764d8bde290e8f738fa21141cadbed75408314b0b337bbf1d5a3444540a02"
+  },
+  {
+   "match": "1996436",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/1996436/1996436_dynamic_events.csv",
+   "lfs": false,
+   "size": 3760511,
+   "algorithm": "sha1",
+   "digest": "10bc71299944a2d8e15d38908d5a157f4316763f"
+  },
+  {
+   "match": "1996436",
+   "kind": "match.json",
+   "path": "data/matches/1996436/1996436_match.json",
+   "lfs": false,
+   "size": 32859,
+   "algorithm": "sha1",
+   "digest": "61736f019eea4d8c97e891dfee3df7e169fc27ff"
+  },
+  {
+   "match": "1996436",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/1996436/1996436_phases_of_play.csv",
+   "lfs": false,
+   "size": 104584,
+   "algorithm": "sha1",
+   "digest": "1e4533bcffac6d8407f1e17a3e89a73a1756da2a"
+  },
+  {
+   "match": "1996436",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/1996436/1996436_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 88945845,
+   "algorithm": "sha256",
+   "digest": "fab9d331e06f3042c83ac17798901b49bb259c99a8f3b319cd0146263cde65e7"
+  },
+  {
+   "match": "2006229",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/2006229/2006229_dynamic_events.csv",
+   "lfs": false,
+   "size": 4778846,
+   "algorithm": "sha1",
+   "digest": "9bb819dd51aa1756a04013103199c776717f2413"
+  },
+  {
+   "match": "2006229",
+   "kind": "match.json",
+   "path": "data/matches/2006229/2006229_match.json",
+   "lfs": false,
+   "size": 28213,
+   "algorithm": "sha1",
+   "digest": "71bff731f85f5266dafd4fa073b52ef66eb91ff8"
+  },
+  {
+   "match": "2006229",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/2006229/2006229_phases_of_play.csv",
+   "lfs": false,
+   "size": 122340,
+   "algorithm": "sha1",
+   "digest": "d0a3775cbdbda49b2cf5cef2981b4bdd4eb50fa2"
+  },
+  {
+   "match": "2006229",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/2006229/2006229_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 90078007,
+   "algorithm": "sha256",
+   "digest": "3ee193ba01f1fe2cbce087eca8a881c21b8b0ea3485ae6c3d7e32e8b2f51e738"
+  },
+  {
+   "match": "2006363",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/2006363/2006363_dynamic_events.csv",
+   "lfs": false,
+   "size": 4794999,
+   "algorithm": "sha1",
+   "digest": "fcac96a21f909e4b2bad3a606dc89fabea263a6f"
+  },
+  {
+   "match": "2006363",
+   "kind": "match.json",
+   "path": "data/matches/2006363/2006363_match.json",
+   "lfs": false,
+   "size": 33294,
+   "algorithm": "sha1",
+   "digest": "edaf492c5fc4c98cb871a8ade25065e9a38d6ef7"
+  },
+  {
+   "match": "2006363",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/2006363/2006363_phases_of_play.csv",
+   "lfs": false,
+   "size": 119862,
+   "algorithm": "sha1",
+   "digest": "d97071f5b62d284d9670dfd73b64a916df8a520f"
+  },
+  {
+   "match": "2006363",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/2006363/2006363_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 90591887,
+   "algorithm": "sha256",
+   "digest": "61dfdbd83f8e654127b249b8503f062338c14ec0c9e65404bcf70fb7c1346bd4"
+  },
+  {
+   "match": "2007448",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/2007448/2007448_dynamic_events.csv",
+   "lfs": false,
+   "size": 4146729,
+   "algorithm": "sha1",
+   "digest": "5aea97c02efd4bd0b6743ffddf61228ceda988d7"
+  },
+  {
+   "match": "2007448",
+   "kind": "match.json",
+   "path": "data/matches/2007448/2007448_match.json",
+   "lfs": false,
+   "size": 32670,
+   "algorithm": "sha1",
+   "digest": "7798b2874d7593e33c9700ba19b12b380a64c65b"
+  },
+  {
+   "match": "2007448",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/2007448/2007448_phases_of_play.csv",
+   "lfs": false,
+   "size": 113871,
+   "algorithm": "sha1",
+   "digest": "aaf6577efc71bfa092998f675abb0ab4e33fb4bc"
+  },
+  {
+   "match": "2007448",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/2007448/2007448_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 90025383,
+   "algorithm": "sha256",
+   "digest": "12d00d6e4257218812df6e4c4263c49387ba0313a83ff8d826c4416828f9c798"
+  },
+  {
+   "match": "2007721",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/2007721/2007721_dynamic_events.csv",
+   "lfs": false,
+   "size": 4653039,
+   "algorithm": "sha1",
+   "digest": "a55b5132980dc1b90ae909e64a2c0a55069d631b"
+  },
+  {
+   "match": "2007721",
+   "kind": "match.json",
+   "path": "data/matches/2007721/2007721_match.json",
+   "lfs": false,
+   "size": 33745,
+   "algorithm": "sha1",
+   "digest": "0bbbabf46dd7330bf8d16faf979fbf576f37218d"
+  },
+  {
+   "match": "2007721",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/2007721/2007721_phases_of_play.csv",
+   "lfs": false,
+   "size": 116997,
+   "algorithm": "sha1",
+   "digest": "7b61a82555d8ea1fa958b5b0645e324cb08b59f0"
+  },
+  {
+   "match": "2007721",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/2007721/2007721_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 92872706,
+   "algorithm": "sha256",
+   "digest": "fea913b8d4cbde8d85c6bdf5f1a4b3fd203b78227e976a171c8ab0946705d378"
+  },
+  {
+   "match": "2010085",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/2010085/2010085_dynamic_events.csv",
+   "lfs": false,
+   "size": 4484006,
+   "algorithm": "sha1",
+   "digest": "ef8e9435749fae31c2b3f6bab01731c3d7ddc6b5"
+  },
+  {
+   "match": "2010085",
+   "kind": "match.json",
+   "path": "data/matches/2010085/2010085_match.json",
+   "lfs": false,
+   "size": 33744,
+   "algorithm": "sha1",
+   "digest": "82b15d3e8cac13d0403259785302023ad89ab9ca"
+  },
+  {
+   "match": "2010085",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/2010085/2010085_phases_of_play.csv",
+   "lfs": false,
+   "size": 115871,
+   "algorithm": "sha1",
+   "digest": "dd1df31ea9e76118e99b8d1dc44377ebb72c4873"
+  },
+  {
+   "match": "2010085",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/2010085/2010085_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 92516156,
+   "algorithm": "sha256",
+   "digest": "04562d9754b2977c80430535e9b5733426bc4ce910db56fe7a3760876211ac5a"
+  },
+  {
+   "match": "2011166",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/2011166/2011166_dynamic_events.csv",
+   "lfs": false,
+   "size": 3846412,
+   "algorithm": "sha1",
+   "digest": "40750a5f2da06c032a10c7ca50953f8d89e78078"
+  },
+  {
+   "match": "2011166",
+   "kind": "match.json",
+   "path": "data/matches/2011166/2011166_match.json",
+   "lfs": false,
+   "size": 28420,
+   "algorithm": "sha1",
+   "digest": "6468e14c07f0108c56cd3457544c106643161099"
+  },
+  {
+   "match": "2011166",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/2011166/2011166_phases_of_play.csv",
+   "lfs": false,
+   "size": 121175,
+   "algorithm": "sha1",
+   "digest": "0d191c3f8d3f373c41ee8110c2a196166c36e6e5"
+  },
+  {
+   "match": "2011166",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/2011166/2011166_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 87441570,
+   "algorithm": "sha256",
+   "digest": "8ec2937050930d87e4f52b2d65515f70ef8edd0ae2814bf40155c4448133390e"
+  },
+  {
+   "match": "2013725",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/2013725/2013725_dynamic_events.csv",
+   "lfs": false,
+   "size": 4508257,
+   "algorithm": "sha1",
+   "digest": "bcca1fe2890119d20b9b7bd13c0a2f9245a7c5f0"
+  },
+  {
+   "match": "2013725",
+   "kind": "match.json",
+   "path": "data/matches/2013725/2013725_match.json",
+   "lfs": false,
+   "size": 27899,
+   "algorithm": "sha1",
+   "digest": "4309772e339cd1f9ebc2aeb4a429076287af3a00"
+  },
+  {
+   "match": "2013725",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/2013725/2013725_phases_of_play.csv",
+   "lfs": false,
+   "size": 130821,
+   "algorithm": "sha1",
+   "digest": "90d4885a26817703b0f7736b0e47703f59c3dc41"
+  },
+  {
+   "match": "2013725",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/2013725/2013725_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 96059074,
+   "algorithm": "sha256",
+   "digest": "13eb83329814ed5f5d73da8f8ab5c5979d6c8a7858e89e28a7fa8072f91fb250"
+  },
+  {
+   "match": "2015213",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/2015213/2015213_dynamic_events.csv",
+   "lfs": false,
+   "size": 4417152,
+   "algorithm": "sha1",
+   "digest": "a4ce1f7555f6f9f53700823451b94f621785314e"
+  },
+  {
+   "match": "2015213",
+   "kind": "match.json",
+   "path": "data/matches/2015213/2015213_match.json",
+   "lfs": false,
+   "size": 27937,
+   "algorithm": "sha1",
+   "digest": "1d58d487d5ca7f8c9cfe28de8a9757e3fae2aff4"
+  },
+  {
+   "match": "2015213",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/2015213/2015213_phases_of_play.csv",
+   "lfs": false,
+   "size": 134493,
+   "algorithm": "sha1",
+   "digest": "b46c9cb5b1cdc30e2ddd5b9a316547122e1ebeff"
+  },
+  {
+   "match": "2015213",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/2015213/2015213_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 102030769,
+   "algorithm": "sha256",
+   "digest": "413990d0024d84856ce1f2a16866b8887472c0cea22c61caef0d1f46505a609e"
+  },
+  {
+   "match": "2016236",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/2016236/2016236_dynamic_events.csv",
+   "lfs": false,
+   "size": 4542962,
+   "algorithm": "sha1",
+   "digest": "6dd13e08dc962c87ebd0392eadb60c06eec2d632"
+  },
+  {
+   "match": "2016236",
+   "kind": "match.json",
+   "path": "data/matches/2016236/2016236_match.json",
+   "lfs": false,
+   "size": 33791,
+   "algorithm": "sha1",
+   "digest": "8bb23c902bb3d5ea82092f6b9c8c20e2379fa67b"
+  },
+  {
+   "match": "2016236",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/2016236/2016236_phases_of_play.csv",
+   "lfs": false,
+   "size": 133630,
+   "algorithm": "sha1",
+   "digest": "8d0b1eefbbdae01260bd295d5133af6f02f8001d"
+  },
+  {
+   "match": "2016236",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/2016236/2016236_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 94737872,
+   "algorithm": "sha256",
+   "digest": "d78555f9dfd7d1ce9de38066d3c98e6d54417c6d45d73b1f1ce7e26f07263d8f"
+  },
+  {
+   "match": "2017461",
+   "kind": "dynamic_events.csv",
+   "path": "data/matches/2017461/2017461_dynamic_events.csv",
+   "lfs": false,
+   "size": 3957366,
+   "algorithm": "sha1",
+   "digest": "68380a92e6fa7c3df056a2e5addc00af1d1a393a"
+  },
+  {
+   "match": "2017461",
+   "kind": "match.json",
+   "path": "data/matches/2017461/2017461_match.json",
+   "lfs": false,
+   "size": 28545,
+   "algorithm": "sha1",
+   "digest": "281fd462ac1ca85a6d9ed2d5b5d5a7654627abe4"
+  },
+  {
+   "match": "2017461",
+   "kind": "phases_of_play.csv",
+   "path": "data/matches/2017461/2017461_phases_of_play.csv",
+   "lfs": false,
+   "size": 118313,
+   "algorithm": "sha1",
+   "digest": "83fbec6d78c9acfed20593545bfda121821365e9"
+  },
+  {
+   "match": "2017461",
+   "kind": "tracking_extrapolated.jsonl",
+   "path": "data/matches/2017461/2017461_tracking_extrapolated.jsonl",
+   "lfs": true,
+   "size": 89543442,
+   "algorithm": "sha256",
+   "digest": "59cfa5588efee041da439f44df5b5b92f2b7305571dc831164e3d05f7415787a"
+  }
+ ]
+}
