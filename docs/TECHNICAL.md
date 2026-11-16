@@ -9,28 +9,28 @@ references:
   - decisions
 ---
 
-# ai-enthusiastic — MTAH 2027 Phase 1, ball possession
+# ai-enthusiastic: MTAH 2027 Phase 1
 
-Final candidate: **v6** = the rules below (all parameters re-selected on external
-data, D016) plus four W6 components (§1b). Results below include historical experiments
-recorded in `docs/PLAN.md` and `docs/research/`; not all exploratory runners are shipped.
-The final output is algorithmic, never hand-corrected, and no production component is fitted
-on the competition match (organisers' clarification of
-2026-10-22, issues #2 and #8): learned parts are trained on external public matches only.
+Our submission, v6, combines tracking-based rules, a pretrained possessor model and two learned
+corrections. All parameters were selected on external data. No production component was fitted
+on the competition match, and no output was hand-corrected.
+
+This document describes the final method and its evaluation. Historical experiments are recorded
+in `docs/PLAN.md` and `docs/research/`; not all exploratory scripts are included in the repository.
 
 ## 1. Approach
 
-Per frame, the tactical tracking is turned into **log-evidence** for three states — home in
-possession (`H`), away (`A`), dead ball (`D`) — and an offline **Viterbi decoder** picks the most
-probable state sequence of each half under a fixed cost for every state change (16 nats between
-the teams, 10 nats into and out of a stoppage). Frames outside the graded halves are `X`; the graded frames before the
-second-half kick-off (110,808–113,741) are `D`. Pipeline and signatures: `docs/PIPELINE.md`.
+The pipeline converts tactical tracking into log-evidence for home possession (`H`), away
+possession (`A`) and dead ball (`D`). An offline Viterbi decoder selects the most probable
+sequence for each half. State changes cost 16 nats between teams and 10 nats into or out of a
+stoppage. Frames outside the graded halves are `X`; graded frames before the second-half
+kick-off (110,808–113,741) are `D`. See `docs/PIPELINE.md` for the pipeline interfaces.
 
-The evidence is two independent log-odds, combined so that team confidence never decides
-alive-versus-dead (`possession/evidence.py`). The constants quoted in the clue descriptions
-below are the values each clue was designed with; the submitted values were all re-selected on
-external data only by `scripts/tune_rules.py` (D016) and live in `config/possession.json` (for
-example touch radius 1.25 m over 2 frames, touch-now 3 nats, team cap logit(0.85)).
+Team ownership and dead-ball evidence use separate log-odds, so confidence in the team does
+not determine whether play is alive (`possession/evidence.py`). The descriptions below include
+historical design values. The final parameters are in `config/possession.json`, selected on
+external data by `scripts/tune_rules.py`. They include a touch radius of 1.25 m over 2 frames,
+a touch-now weight of 3 nats and a team-confidence cap of logit(0.85).
 
 **Team log-odds (home vs away)**, capped at ±logit(0.75) per frame because neighbouring frames
 are not independent votes:
@@ -52,8 +52,8 @@ are not independent votes:
    velocity never changes (beyond a label-free jitter floor read off the match) is a ball flying
    past a player, not a touch, and is dropped (11 % of votes on the Metrica judge, at coin-flip
    precision). *Touch-now* (v5, `w_touch_now`): while a surviving vote is active, 2 nats are
-   added beyond the cap below — a seen touch is the label by definition, the cap is for the
-   proxies. This is what lets 1–4 s possessions (a third of all possessions) be decoded.
+   added beyond the team-confidence cap. This strengthens direct touch evidence and helps
+   recover 1–4 s possessions, which account for a third of possessions in the reported analysis.
 3. *Ball-free team shape* (`w_shape`): the possessing team is longer along its attacking axis
    and wider, the defending team runs more, and the whole block drifts towards the possessor's
    goal. Each team's attack direction is inferred per half from where it keeps its goalkeeper
@@ -81,12 +81,12 @@ are not independent votes:
    second (`w_slow_far`: a ball waiting for a restart; alive false-positive rate ≤ 1.4 % on
    every judge).
 
-A missing ball is **missing evidence, not a dead ball**: it only flattens the team evidence; the
-dead log-odds come from the players and from a projected exit.
+Ball absence alone does not imply dead ball. It weakens team evidence; dead-ball evidence comes
+from player movement and projected ball exits.
 
-### 1b. v6 additions (W6, D015)
+### Additional v6 components
 
-First the external judges were made to look like the target, using label-free statistics only:
+We used label-free statistics to model the competition tracking's noise in external evaluations:
 the target's ball track is smooth (frame-to-frame second difference 0.9 cm), its players drop out
 (20.5 seen on average, 14 at the 5th percentile) and its ball sits ~1 m from the nearest player
 where the Metrica sample's sits on the player. The noisy judges now use that noise
@@ -102,7 +102,7 @@ On top of the v5 logits, v6 adds:
     the ball learned provider artefacts and failed when trained on one provider and tested on the
     other; this one transfers (19/20 cells).
 11. *PathCRF team evidence* (`possession/pathcrf.py`; Kim et al., KDD 2026; vendored, MPL-2.0,
-    integrated first by a teammate): a pretrained set-transformer + CRF infers the ball possessor
+    first integrated by a teammate): a pretrained set-transformer and CRF infer the ball possessor
     from the 22 players' movement alone. Tracklets are re-tracked into 11 tracks per team, PathCRF
     runs inside the stretches v5 decodes as alive, and half its home log-odds (clipped at +-4) is
     added to the team logit. Its value is where the ball evidence is unclear (57 % of the
@@ -123,7 +123,7 @@ matches (clean and matched noise) and stored in `models/` with their SHA-256 in 
 | Tactical ATD (players + ball) | all evidence |
 | Smart Tagging (set pieces) | implemented as a dead-ball prior, **off** in the submission: no external tagged data to tune it on (D016) |
 | Tactical homography, both videos | not used (a teammate's YOLO pilot on the tactical video failed its agreement test: top detection within 2 m of the tracked ball on only 53-59 % of frames) |
-| PathCRF pretrained model (Kim et al., KDD 2026, github.com/hyunsungkim-ds/pathcrf, MPL-2.0; trained on five Sportec Open DFL matches) | ball-free team evidence (§1b); evaluated only on matches it never trained on |
+| PathCRF pretrained model (Kim et al., KDD 2026, github.com/hyunsungkim-ds/pathcrf, MPL-2.0; trained on five Sportec Open DFL matches) | ball-free team evidence; evaluated only on matches it never trained on |
 | Broadcast ATD / homography | **dropped** after a measured experiment (W7a): formation-based clock alignment accepted 31 of 253 broadcast runs and recovered 0.5% of the tactical ball gaps; the two balls disagreed by 2.6 m median where both were visible |
 | IDSSE / Sportec Open DFL (Bassek et al. 2025, 7 Bundesliga matches, CC-BY 4.0; `scripts/fetch_idsse.py`) | external labelled data: fitting the four shape weights, and validating every design choice on ~3,000 labelled possessions, clean and with ATD-like noise |
 | SkillCorner open data (20 A-League 2024/25 matches, github.com/SkillCorner/opendata, MIT; `scripts/fetch_skillcorner.py`) | third external judge only (W7): validation of v6 on a provider none of it was built on; not used for training or tuning |
@@ -146,11 +146,11 @@ than 10 s; tracked objects 21.1 per frame on average (p5 14). The public window 
 of the time, so it understates the problem: on the public window, keeping the last seen team is
 right on 94% of missing frames, and only 1 of its 20 transitions falls inside a gap.
 
-Design consequences: no interpolation of the ball across gaps (tested, rejected); team evidence in
-gaps comes from the memory and the ball-free shape clues; slot identity is never used (46
-anonymous, fragmented slots), every feature is a per-team aggregate; speeds use the tracker's
-player speed and a ball speed re-derived from positions (the tracker's ball speed is mostly
-missing).
+We tested and rejected ball interpolation across gaps. During gaps, the rules use touch memory
+and team shape; PathCRF adds player-only possessor evidence. The rule features aggregate players
+by team rather than treating the 46 fragmented slots as stable identities. PathCRF separately
+reconstructs tracks, as described above. Player speeds come from the tracker; ball speed is
+recomputed from positions because the supplied ball speed is mostly missing.
 
 Robustness is measured with two stress tests on the public window (`scripts/stress_test.py`):
 *transplant* hides the ball in runs drawn from the real full-match gap distribution until 41% is
@@ -172,7 +172,8 @@ missing (5 seeds), *transition-centred* hides it for 5/10/20 s around every true
 
 ## 5. Validation and results
 
-Three judges, none of them the private ground truth:
+We use the public window for correctness and robustness checks, and external matches for
+method comparison. None of these evaluations uses the private ground truth.
 
 | Judge | Role |
 |---|---|
@@ -180,13 +181,13 @@ Three judges, none of them the private ground truth:
 | Stress tests on the public window | gap robustness |
 | IDSSE clean and noisy (`scripts/idsse_eval.py`) | retrospective development comparison, not held-out evaluation: production shape weights were fitted on all seven matches; noise = ball dropout with our gap statistics, jitter, slot fragmentation |
 
-Validation audit (V1): the historical IDSSE numbers below are not proof of generalization.
+The historical IDSSE results below do not establish generalization.
 `scripts/idsse_eval.py` does not refit the pooled shape weights per held-out match. The separate
 learned experiment excludes evaluation matches from classifier fitting, but its shared calibration
 temperature uses their labels (`fit_with_calibration`), so its reported LOMO scores also have
 selection leakage. That experimental model remains outside production. Strict comparisons must
 exclude confirmation labels from every fitted component, including calibration. Reused matches
-and the 17-possession public window cannot establish that v3c is the best possible model.
+and the 17-possession public window limit what these comparisons can establish.
 
 IDSSE's labels are finer than ours (D share 41–52%, spells mean 5.5–9 s versus 14 s in our public
 window), so it is used for *relative* decisions, never to set our switching rate.
@@ -220,8 +221,9 @@ parts with SkillCorner added lost up to 0.011 on Metrica/IDSSE and was not adopt
 
 Stress tests on the public window (`scripts/stress_test.py --seeds 5`, robustness checks, not
 selectors), v5 -> v6: transplant (41 % ball missing, 5 seeds) mean 0.493 -> 0.644, min 0.400 ->
-0.579; transition-centred 5 / 10 / 20 s 0.317 / 0.415 / 0.400 -> 0.678 / 0.752 / 0.813. Hiding
-the ball around hand-overs no longer hurts: PathCRF reads the players, not the ball.
+0.579; transition-centred 5 / 10 / 20 s 0.317 / 0.415 / 0.400 -> 0.678 / 0.752 / 0.813. These
+checks show improved robustness to hidden ball observations; they do not establish performance
+on naturally occurring gaps.
 
 v4 and v5 are also scored on the Metrica sample matches (clean / noisy spellF1): v3c
 0.461 / 0.439, v4 0.563 / 0.518, v5 **0.605 / 0.570**; at each step every one of the ten
@@ -246,7 +248,7 @@ and a team-only learner improved reserved IDSSE noisy spellF1 0.38329→0.43101,
 spellF1 fell 0.60000→0.55484 and all target stress scores declined. It was **not adopted**.
 A frozen comparison on three newly acquired SkillCorner matches yielded only +0.01166 mean
 spellF1 against explicitly weak provider-derived phase labels, not independent corrected truth.
-These experiments strengthen the transfer warning; they do not change the production method.
+Neither experiment changed the production method.
 
 ## 6. Limitations
 
@@ -293,4 +295,3 @@ With pip, activate that environment, set `MTAH_DATA_DIR` and `MTAH_WORK_DIR`, an
 Final local verification: 164 package tests and 12 guard tests passed; cold and cached runs
 were byte-identical with SHA-256 prefix `263bfddea0d0eeb7`; official validator exit 0.
 Public sanity check: spellF1 0.6235 [0.4588, 0.7765], macroF1 0.8300. The private score is unknown.
-Upload this document as `ai-enthusiastic.md`; the official form accepts Markdown.
